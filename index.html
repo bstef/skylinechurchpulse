@@ -213,6 +213,8 @@ let filterType = "All";
 let pcoPlans = [];
 let pcoError = null;
 let pcoLoaded = false;
+let pcoLoading = false;
+let pcoFilterType = "All";
 let calendarMonth = null;
 
 function getCalendarEvents() {
@@ -352,6 +354,9 @@ function render() {
         const entry = entries.find(e => e.id === btn.dataset.id);
         if (entry) openDetail(entry);
       });
+    });
+    content.querySelectorAll(".filter-chip").forEach(chip => {
+      chip.addEventListener("click", () => { pcoFilterType = chip.dataset.filter; render(); });
     });
     if (!pcoLoaded) loadPcoPlans();
     return;
@@ -529,7 +534,9 @@ function renderCharts() {
 }
 
 async function loadPcoPlans(force) {
+  if (pcoLoading) return;
   if (!force && pcoLoaded) return;
+  pcoLoading = true;
   pcoError = null;
   try {
     const res = await fetch("/api/pco-plans");
@@ -544,6 +551,7 @@ async function loadPcoPlans(force) {
     pcoError = "Couldn't reach Planning Center: " + err.message;
     pcoPlans = [];
   }
+  pcoLoading = false;
   pcoLoaded = true;
   render();
 }
@@ -570,13 +578,30 @@ function renderPco() {
     </div>`;
   }
 
+  const typesPresent = [...new Set(pcoPlans.map(p => p.service_type_name))].sort();
+  const filterRow = `<div class="filter-row">
+    <button class="filter-chip ${pcoFilterType === "All" ? "all-active" : ""}" data-filter="All">All (${pcoPlans.length})</button>
+    ${typesPresent.map(name => {
+      const matched = guessServiceType(name);
+      const cls = matched ? badgeClass(matched) : "badge-unmatched";
+      const count = pcoPlans.filter(p => p.service_type_name === name).length;
+      return `<button class="filter-chip ${cls} ${pcoFilterType === name ? "active" : ""}" data-filter="${escapeHtml(name)}">${escapeHtml(name)} (${count})</button>`;
+    }).join("")}
+  </div>`;
+
+  const filteredPlans = pcoFilterType === "All" ? pcoPlans : pcoPlans.filter(p => p.service_type_name === pcoFilterType);
+
+  if (filteredPlans.length === 0) {
+    return `${header}${filterRow}<div class="filter-empty">No plans for ${escapeHtml(pcoFilterType)}.</div>`;
+  }
+
   const entriesByPlan = {};
   entries.forEach(e => {
     if (!e.pco_plan_id) return;
     (entriesByPlan[e.pco_plan_id] ||= []).push(e);
   });
 
-  const rows = pcoPlans.map(p => {
+  const rows = filteredPlans.map(p => {
     const matched = guessServiceType(p.service_type_name);
     const badge = matched
       ? `<span class="service-badge ${badgeClass(matched)}">${escapeHtml(matched)}</span>`
@@ -593,7 +618,7 @@ function renderPco() {
     </tr>`;
   }).join("");
 
-  return `${header}<table>
+  return `${header}${filterRow}<table>
     <thead><tr><th>Date</th><th>Plan</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
@@ -764,6 +789,7 @@ applyTheme(getStoredTheme());
 if (configured()) {
   sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   loadEntries();
+  loadPcoPlans();
 } else {
   render();
 }
