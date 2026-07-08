@@ -96,7 +96,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 /* ============================================================== */
 
 const SERVICE_TYPES = ["Sunday AM", "Sunday PM", "Midweek", "Youth", "Special Event"];
-let supabase = null;
+let sb = null;
 let entries = [];
 let view = "log";
 let charts = [];
@@ -116,14 +116,14 @@ function showError(msg) {
 
 async function loadEntries() {
   if (!configured()) return;
-  const { data, error } = await supabase.from("service_entries").select("*").order("service_date", { ascending: false });
+  const { data, error } = await sb.from("service_entries").select("*").order("service_date", { ascending: false });
   if (error) { showError("Couldn't load entries: " + error.message); return; }
   entries = data;
   render();
 }
 
 async function addEntry(payload) {
-  const { error } = await supabase.from("service_entries").insert([payload]);
+  const { error } = await sb.from("service_entries").insert([payload]);
   if (error) { showError("Couldn't save: " + error.message); return false; }
   showError("");
   await loadEntries();
@@ -131,7 +131,7 @@ async function addEntry(payload) {
 }
 
 async function removeEntry(id) {
-  const { error } = await supabase.from("service_entries").delete().eq("id", id);
+  const { error } = await sb.from("service_entries").delete().eq("id", id);
   if (error) { showError("Couldn't delete: " + error.message); return; }
   await loadEntries();
 }
@@ -297,7 +297,7 @@ document.getElementById("tab-log").addEventListener("click", () => { view = "log
 document.getElementById("tab-analytics").addEventListener("click", () => { view = "analytics"; render(); });
 
 if (configured()) {
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   loadEntries();
 } else {
   render();
