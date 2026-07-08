@@ -29,6 +29,16 @@ const EXCLUDED_SERVICE_TYPES = [
   "Childcare Services",
 ];
 
+// Only these Service Type folders get expanded into one row per PlanTime.
+// Some folders (e.g. SkyYOUTH) tag several internal timing checkpoints —
+// soundcheck, doors, start, end — as time_type "service" even though they're
+// all one gathering, not separate services; splitting on those produces
+// bogus duplicate rows. Celebration Service genuinely has two distinct
+// congregational services (9:30/11:00) recorded as separate PlanTimes.
+// Add a folder name here only once you've confirmed its PlanTimes really do
+// represent separate services.
+const MULTI_TIME_SERVICE_TYPES = ["Celebration Service"];
+
 export async function onRequestGet(context) {
   const { PCO_APP_ID, PCO_SECRET } = context.env;
   if (!PCO_APP_ID || !PCO_SECRET) {
@@ -90,7 +100,13 @@ export async function onRequestGet(context) {
     // "Celebration Service" Plan covers both a 9:30am and 11:00am service,
     // each as its own PlanTime). Expand each Plan into one row per actual
     // service time so they show up — and auto-match to a service type —
-    // separately, instead of one ambiguous row.
+    // separately, instead of one ambiguous row. Only do this for folders
+    // known to genuinely have multiple services (see MULTI_TIME_SERVICE_TYPES).
+    const shouldSplit = MULTI_TIME_SERVICE_TYPES.some(name => name.toLowerCase() === st.name.toLowerCase());
+    if (!shouldSplit) {
+      return rawPlans.map(p => ({ ...p, id: p.plan_id }));
+    }
+
     const expanded = await Promise.all(rawPlans.map(async (plan) => {
       let times = [];
       try {

@@ -88,6 +88,9 @@
   .field span{font-size:13px;font-weight:600;color:var(--field-label);}
   .field-section-label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--brass);font-weight:700;border-top:1px solid var(--line);padding-top:14px;}
   .service-locked{display:flex;align-items:center;min-height:41px;}
+  .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:var(--ink);color:var(--paper);border-radius:6px;padding:14px 18px;display:flex;align-items:center;gap:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:60;font-size:14px;}
+  .toast button{background:none;border:1px solid var(--paper);color:var(--paper);border-radius:4px;padding:6px 12px;font-size:13px;font-weight:700;}
+  .toast button:hover{background:var(--paper);color:var(--ink);}
   input,select,textarea{border:1px solid var(--line);border-radius:4px;padding:10px 12px;font-size:15px;background:var(--surface);color:var(--ink);outline:none;font-family:inherit;width:100%;}
   input[type=range]{accent-color:var(--brass);padding:0;}
   .row2{display:flex;gap:12px;}
@@ -127,6 +130,7 @@
   .status-pill{border:none;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:700;letter-spacing:.02em;white-space:nowrap;}
   .status-logged{background:var(--pew);color:var(--paper);}
   .status-pending{background:var(--brass-soft);color:var(--brass);border:1px solid var(--brass);}
+  .status-pill:disabled{opacity:.5;cursor:not-allowed;}
   .pco-status-group{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;}
   .pco-linked-note{background:var(--brass-soft);color:var(--brass);border-radius:4px;padding:10px 14px;font-size:13px;font-weight:600;margin-top:-8px;}
   .cal-header{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
@@ -185,6 +189,7 @@
 </footer>
 
 <div id="modal-slot"></div>
+<div id="toast-slot"></div>
 
 <script>
 /* ====================== CONFIGURE THIS ======================
@@ -298,6 +303,7 @@ function fmtDate(d) {
   return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 function avg(arr) { return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
+function pctTrue(field) { return entries.length ? Math.round(100 * entries.filter(e => e[field]).length / entries.length) : 0; }
 function showError(msg) {
   document.getElementById("error-slot").innerHTML = msg ? `<div class="error-banner">${msg}</div>` : "";
 }
@@ -325,10 +331,30 @@ async function addEntry(payload) {
   return true;
 }
 
+let undoTimeoutId = null;
+
 async function removeEntry(id) {
+  const entry = entries.find(e => e.id === id);
   const { error } = await sb.from("service_entries").delete().eq("id", id);
   if (error) { showError("Couldn't delete: " + error.message); return; }
   await loadEntries();
+  if (entry) showUndoToast(entry);
+}
+
+function showUndoToast(deletedEntry) {
+  clearTimeout(undoTimeoutId);
+  document.getElementById("toast-slot").innerHTML = `
+    <div class="toast">
+      <span>Entry deleted.</span>
+      <button id="undo-btn">Undo</button>
+    </div>`;
+  document.getElementById("undo-btn").addEventListener("click", async () => {
+    clearTimeout(undoTimeoutId);
+    document.getElementById("toast-slot").innerHTML = "";
+    const { id, created_at, ...payload } = deletedEntry;
+    await addEntry(payload);
+  });
+  undoTimeoutId = setTimeout(() => { document.getElementById("toast-slot").innerHTML = ""; }, 7000);
 }
 
 async function updateEntry(id, payload) {
@@ -514,6 +540,8 @@ function renderAnalyticsShell() {
   const avgUnity = avg(entries.map(e => e.unity));
   const avgEngagement = avg(entries.map(e => e.engagement));
   const avgLoudness = avg(entries.map(e => e.loudness_db));
+  const avgSpiritual = avg(entries.map(e => e.spiritual_response));
+  const avgTransition = avg(entries.map(e => e.transition_clarity));
 
   return `
     <div class="stats">
@@ -522,16 +550,26 @@ function renderAnalyticsShell() {
       <div class="pill"><div class="label">Avg Engagement</div><div class="value">${avgEngagement.toFixed(1)}<span>/5</span></div></div>
       <div class="pill"><div class="label">Avg Loudness</div><div class="value">${avgLoudness.toFixed(0)}<span> dB</span></div></div>
     </div>
+    <div class="stats">
+      <div class="pill"><div class="label">Sound Clarity</div><div class="value">${pctTrue("sound_clarity")}<span>%</span></div></div>
+      <div class="pill"><div class="label">Avg Spiritual Response</div><div class="value">${avgSpiritual.toFixed(1)}<span>/10</span></div></div>
+      <div class="pill"><div class="label">Avg Transition Clarity</div><div class="value">${avgTransition.toFixed(1)}<span>/5</span></div></div>
+    </div>
     <div class="card"><h3 class="display">Attendance, last ${Math.min(sorted.length,8)} services</h3><div class="chart-box"><canvas id="chart-attendance"></canvas></div></div>
-    <div class="card"><h3 class="display">Unity &amp; Engagement (1–5)</h3><div class="chart-box"><canvas id="chart-unity"></canvas></div></div>
+    <div class="card"><h3 class="display">Unity, Engagement &amp; Transition Clarity (1–5)</h3><div class="chart-box"><canvas id="chart-unity"></canvas></div></div>
+    <div class="card"><h3 class="display">Spiritual Response (0–10)</h3><div class="chart-box"><canvas id="chart-spiritual"></canvas></div></div>
     <div class="card"><h3 class="display">Loudness (dB)</h3><div class="chart-box"><canvas id="chart-loudness"></canvas></div></div>
+    <div class="card"><h3 class="display">Service Flow — % Landed Well</h3><div class="chart-box"><canvas id="chart-flow"></canvas></div></div>
   `;
 }
 
 function themeColors() {
   const cs = getComputedStyle(document.documentElement);
   const v = (name) => cs.getPropertyValue(name).trim();
-  return { ink: v("--ink"), pew: v("--pew"), brass: v("--brass"), rust: v("--rust"), line: v("--line") };
+  return {
+    ink: v("--ink"), pew: v("--pew"), brass: v("--brass"), rust: v("--rust"), line: v("--line"),
+    c0: v("--c0"), c1: v("--c1"), c2: v("--c2"), c3: v("--c3"),
+  };
 }
 
 function renderCharts() {
@@ -552,6 +590,7 @@ function renderCharts() {
     data: { labels, datasets: [
       { label: "Unity", data: sorted.map(e=>e.unity), borderColor: t.brass, backgroundColor:t.brass, tension:.3 },
       { label: "Engagement", data: sorted.map(e=>e.engagement), borderColor: t.rust, backgroundColor:t.rust, tension:.3 },
+      { label: "Transition Clarity", data: sorted.map(e=>e.transition_clarity), borderColor: t.c3, backgroundColor:t.c3, tension:.3 },
     ]},
     options: { scales: { y: { min:0, max:5, grid:{color:t.line} }, x:{grid:{display:false}} } }
   });
@@ -562,7 +601,25 @@ function renderCharts() {
     options: { plugins: { legend: { display:false } }, scales: { x:{grid:{display:false}}, y:{grid:{color:t.line}} } }
   });
 
-  charts = [c1, c2, c3];
+  const c4 = new Chart(document.getElementById("chart-spiritual"), {
+    type: "line",
+    data: { labels, datasets: [{ label: "Spiritual Response", data: sorted.map(e=>e.spiritual_response), borderColor: t.pew, backgroundColor:t.pew, tension:.3 }] },
+    options: { plugins: { legend: { display:false } }, scales: { x:{grid:{display:false}}, y:{min:0,max:10,grid:{color:t.line}} } }
+  });
+
+  const flowFields = [
+    { key: "lighting_fit", label: "Lighting", color: t.c0 },
+    { key: "talking_fit", label: "Talking", color: t.c1 },
+    { key: "announcements_fit", label: "Announcements", color: t.c2 },
+    { key: "sermon_fit", label: "Sermon", color: t.c3 },
+  ];
+  const c5 = new Chart(document.getElementById("chart-flow"), {
+    type: "bar",
+    data: { labels: flowFields.map(f=>f.label), datasets: [{ label: "% Landed Well", data: flowFields.map(f=>pctTrue(f.key)), backgroundColor: flowFields.map(f=>f.color), borderRadius: 3 }] },
+    options: { plugins: { legend: { display:false } }, scales: { x:{grid:{display:false}}, y:{min:0,max:100,grid:{color:t.line}} } }
+  });
+
+  charts = [c1, c2, c3, c4, c5];
 }
 
 async function loadPcoPlans(force) {
@@ -635,6 +692,8 @@ function renderPco() {
     (entriesByPlan[e.pco_plan_id] ||= []).push(e);
   });
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+
   const rows = filteredPlans.map(p => {
     const matchSource = p.plan_time_name || p.service_type_name;
     const matched = guessServiceType(matchSource);
@@ -645,7 +704,10 @@ function renderPco() {
     const loggedPills = linked.map(e =>
       `<button class="status-pill status-logged pco-view-btn" data-id="${escapeHtml(e.id)}">${escapeHtml(e.service_type)} ✓</button>`
     ).join("");
-    const logBtn = `<button class="status-pill status-pending pco-log-btn" data-id="${escapeHtml(p.id)}">${linked.length ? "+ Log another" : "Needs details"}</button>`;
+    const isFuture = p.sort_date.slice(0, 10) > todayStr;
+    const logBtn = isFuture
+      ? `<button class="status-pill status-pending" disabled title="Available once the service happens">Upcoming</button>`
+      : `<button class="status-pill status-pending pco-log-btn" data-id="${escapeHtml(p.id)}">${linked.length ? "+ Log another" : "Needs details"}</button>`;
     return `<tr>
       <td>${fmtDate(p.sort_date.slice(0,10))}${p.plan_time_name ? `<div class="notes">${escapeHtml(p.plan_time_name)}</div>` : ""}</td>
       <td>${badge}<div class="notes">${escapeHtml(p.title)}${p.series_title ? " · " + escapeHtml(p.series_title) : ""}</div></td>
@@ -783,7 +845,7 @@ function openModal(entry, pcoPlan) {
         <div class="modal-body">
           ${pcoPlan ? `<div class="pco-linked-note">From Planning Center: <strong>${escapeHtml(pcoPlan.title)}${pcoPlan.plan_time_name ? " · " + escapeHtml(pcoPlan.plan_time_name) : ""}</strong></div>` : ""}
           <div class="row2">
-            <label class="field" style="flex:1"><span>Date</span><input type="date" id="f-date" value="${v.date}"></label>
+            <label class="field" style="flex:1"><span>Date</span><input type="date" id="f-date" value="${v.date}" max="${today}"></label>
             ${serviceLocked ? `
             <div class="field" style="flex:1">
               <span>Service</span>
@@ -843,10 +905,12 @@ function openModal(entry, pcoPlan) {
     const attendance = document.getElementById("f-attendance").value;
     const loudness = document.getElementById("f-loudness").value;
     const serviceType = document.getElementById("f-service").value;
+    const serviceDate = document.getElementById("f-date").value;
     if (!serviceType) { showError("Please select a service."); return; }
     if (!attendance || !loudness) { showError("Attendance and loudness (dB) are required."); return; }
+    if (serviceDate > today) { showError("Can't log details for a service that hasn't happened yet."); return; }
     const payload = {
-      service_date: document.getElementById("f-date").value,
+      service_date: serviceDate,
       service_type: serviceType,
       attendance: Number(attendance),
       unity: Number(document.getElementById("f-unity").value),
