@@ -7,6 +7,16 @@ const PCO_BASE = "https://api.planningcenteronline.com/services/v2";
 const WINDOW_DAYS_PAST = 14;
 const WINDOW_DAYS_FUTURE = 45;
 
+// Service Type folders that aren't worship/gathering events Pulse cares about
+// (children's check-in, assimilation, etc.) — tune this list as your PCO org changes.
+const EXCLUDED_SERVICE_TYPES = [
+  "Check In, Baby Steps",
+  "Little Steps, Handprints, Awana & Clubhouse Teams",
+  "Assimilation",
+  "First Impressions Teams Service Plan",
+  "Childcare Services",
+];
+
 export async function onRequestGet(context) {
   const { PCO_APP_ID, PCO_SECRET } = context.env;
   if (!PCO_APP_ID || !PCO_SECRET) {
@@ -25,7 +35,9 @@ export async function onRequestGet(context) {
       return json({ error: `Planning Center error fetching service types (${typesRes.status})` }, typesRes.status);
     }
     const typesBody = await typesRes.json();
-    serviceTypes = typesBody.data.map(t => ({ id: t.id, name: t.attributes.name }));
+    serviceTypes = typesBody.data
+      .map(t => ({ id: t.id, name: t.attributes.name }))
+      .filter(t => !EXCLUDED_SERVICE_TYPES.some(ex => ex.toLowerCase() === t.name.toLowerCase()));
   } catch (err) {
     return json({ error: "Failed to reach Planning Center: " + err.message }, 502);
   }
