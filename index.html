@@ -603,18 +603,20 @@ function renderPco() {
     </div>`;
   }
 
-  const typesPresent = [...new Set(pcoPlans.map(p => p.service_type_name))].sort();
+  const pcoRowLabel = p => guessServiceType(p.plan_time_name || p.service_type_name) || p.service_type_name;
+
+  const typesPresent = [...new Set(pcoPlans.map(pcoRowLabel))].sort();
   const filterRow = `<div class="filter-row">
     <button class="filter-chip ${pcoFilterType === "All" ? "all-active" : ""}" data-filter="All">All (${pcoPlans.length})</button>
-    ${typesPresent.map(name => {
-      const matched = guessServiceType(name);
+    ${typesPresent.map(label => {
+      const matched = SERVICE_TYPES.includes(label) ? label : "";
       const cls = matched ? badgeClass(matched) : "badge-unmatched";
-      const count = pcoPlans.filter(p => p.service_type_name === name).length;
-      return `<button class="filter-chip ${cls} ${pcoFilterType === name ? "active" : ""}" data-filter="${escapeHtml(name)}">${escapeHtml(name)} (${count})</button>`;
+      const count = pcoPlans.filter(p => pcoRowLabel(p) === label).length;
+      return `<button class="filter-chip ${cls} ${pcoFilterType === label ? "active" : ""}" data-filter="${escapeHtml(label)}">${escapeHtml(label)} (${count})</button>`;
     }).join("")}
   </div>`;
 
-  const filteredPlans = pcoFilterType === "All" ? pcoPlans : pcoPlans.filter(p => p.service_type_name === pcoFilterType);
+  const filteredPlans = pcoFilterType === "All" ? pcoPlans : pcoPlans.filter(p => pcoRowLabel(p) === pcoFilterType);
 
   if (filteredPlans.length === 0) {
     return `${header}${filterRow}<div class="filter-empty">No plans for ${escapeHtml(pcoFilterType)}.</div>`;
@@ -638,7 +640,7 @@ function renderPco() {
     ).join("");
     const logBtn = `<button class="status-pill status-pending pco-log-btn" data-id="${escapeHtml(p.id)}">${linked.length ? "+ Log another" : "Needs details"}</button>`;
     return `<tr>
-      <td>${fmtDate(p.sort_date.slice(0,10))}</td>
+      <td>${fmtDate(p.sort_date.slice(0,10))}${p.plan_time_name ? `<div class="notes">${escapeHtml(p.plan_time_name)}</div>` : ""}</td>
       <td>${badge}<div class="notes">${escapeHtml(p.title)}${p.series_title ? " · " + escapeHtml(p.series_title) : ""}</div></td>
       <td class="actions-cell"><div class="pco-status-group">${loggedPills}${logBtn}</div></td>
     </tr>`;
