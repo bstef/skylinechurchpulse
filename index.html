@@ -110,6 +110,12 @@
   .detail-actions{display:flex;gap:10px;margin-top:4px;}
   .detail-actions .save-btn{flex:1;margin-top:0;}
   .btn-danger{flex:1;background:none;border:1px solid var(--rust);color:var(--rust);border-radius:4px;padding:13px;font-size:15px;font-weight:700;}
+  footer{border-top:1px solid var(--line);}
+  .footer-wrap{padding:28px 24px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;}
+  .footer-links{display:flex;gap:24px;flex-wrap:wrap;justify-content:center;}
+  .footer-links a{color:var(--brass);text-decoration:none;font-size:14px;font-weight:600;}
+  .footer-links a:hover{text-decoration:underline;}
+  .footer-meta{color:var(--muted);font-size:12px;}
 </style>
 </head>
 <body>
@@ -139,6 +145,16 @@
   <div id="config-slot"></div>
   <div id="content"></div>
 </main>
+
+<footer>
+  <div class="wrap footer-wrap">
+    <div class="footer-links">
+      <a href="http://www.skylinechurchnj.org" target="_blank" rel="noopener noreferrer">Skyline Church Website</a>
+      <a href="https://skylinechurchnj.churchcenter.com/registrations/events" target="_blank" rel="noopener noreferrer">Planning Center · Events</a>
+    </div>
+    <div class="footer-meta">Skyline Church · NJ &nbsp;·&nbsp; Skyline Pulse Service Ledger &nbsp;·&nbsp; Internal use only &nbsp;·&nbsp; © <span id="footer-year"></span></div>
+  </div>
+</footer>
 
 <div id="modal-slot"></div>
 
@@ -495,6 +511,7 @@ document.getElementById("tab-log").addEventListener("click", () => { view = "log
 document.getElementById("tab-analytics").addEventListener("click", () => { view = "analytics"; render(); });
 document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
 document.getElementById("export-btn").addEventListener("click", exportCSV);
+document.getElementById("footer-year").textContent = new Date().getFullYear();
 
 applyTheme(getStoredTheme());
 
