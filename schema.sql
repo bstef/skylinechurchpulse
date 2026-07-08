@@ -24,5 +24,8 @@ create policy "Allow anon read" on public.service_entries
 create policy "Allow anon insert" on public.service_entries
   for insert with check (true);
 
+create policy "Allow anon update" on public.service_entries
+  for update using (true) with check (true);
+
 create policy "Allow anon delete" on public.service_entries
   for delete using (true);

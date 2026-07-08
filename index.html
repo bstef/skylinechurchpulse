@@ -3,22 +3,26 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Skyline Church · Service Ledger</title>
+<title>Skyline Pulse</title>
+<link rel="icon" type="image/jpeg" href="assets/skylinelogosq.jpeg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
   :root{
-    --ink:#1F2A24; --paper:#F6F3EC; --brass:#B8925A; --pew:#3D5A4C; --rust:#A6503C; --line:#D8D1C0; --muted:#8A8375;
+    --ink:#1F2A24; --paper:#F6F3EC; --surface:#FFFFFF; --brass:#B8925A; --pew:#3D5A4C; --rust:#A6503C; --line:#D8D1C0; --muted:#8A8375; --field-label:#5B5546; --banner-bg:#F3E4DE; --brass-soft:rgba(184,146,90,.14); --zebra:rgba(31,42,36,.02);
+  }
+  [data-theme="dark"]{
+    --ink:#EDE8DA; --paper:#1B211D; --surface:#242B25; --brass:#D3AD78; --pew:#7FA491; --rust:#DD8266; --line:#3A423B; --muted:#9B9484; --field-label:#C9C2B0; --banner-bg:#3A241E; --brass-soft:rgba(211,173,120,.16); --zebra:rgba(255,255,255,.02);
   }
   *{box-sizing:border-box;}
-  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Source Sans 3',sans-serif;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Source Sans 3',sans-serif;transition:background .2s,color .2s;}
   .display{font-family:'Fraunces',Georgia,serif;}
   header{border-bottom:1px solid var(--line);}
   .wrap{max-width:1080px;margin:0 auto;padding:0 24px;}
   .headtop{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;padding:28px 0 20px;}
-  .eyebrow{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--brass);font-weight:600;margin-bottom:6px;}
+  .logo{height:60px;display:block;margin-bottom:14px;}
   h1{font-size:40px;font-weight:700;margin:0;line-height:1;}
   button{cursor:pointer;font-family:inherit;}
   .btn-primary{display:flex;align-items:center;gap:8px;background:var(--pew);color:var(--paper);border:none;border-radius:3px;padding:12px 20px;font-size:15px;font-weight:600;box-shadow:0 2px 0 rgba(0,0,0,.15);}
@@ -29,34 +33,46 @@
   .empty{text-align:center;padding:80px 20px;color:var(--muted);}
   .empty .display{font-size:22px;margin-bottom:8px;color:var(--ink);}
   .stats{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:32px;}
-  .pill{background:#fff;border:1px solid var(--line);border-radius:4px;padding:18px 20px;flex:1 1 200px;}
+  .pill{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:18px 20px;flex:1 1 200px;}
   .pill .label{display:flex;align-items:center;gap:8px;color:var(--brass);margin-bottom:8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;}
   .pill .value{font-size:30px;font-weight:700;font-family:'Fraunces',Georgia,serif;}
   .pill .value span{font-size:16px;font-weight:400;color:var(--muted);}
-  .card{background:#fff;border:1px solid var(--line);border-radius:4px;padding:24px;margin-bottom:24px;}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:24px;margin-bottom:24px;}
   .card h3{margin:0 0 20px;font-size:18px;}
-  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:4px;overflow:hidden;}
-  thead th{text-align:left;padding:12px 20px;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;}
-  tbody td{padding:14px 20px;border-bottom:1px solid var(--line);font-size:15px;vertical-align:top;}
-  tbody tr:hover{background:rgba(184,146,90,0.08);}
-  .notes{font-size:13px;color:var(--muted);margin-top:2px;}
-  .del-btn{background:none;border:none;color:#C9C2B2;font-size:16px;}
+  table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  thead th{text-align:left;padding:13px 20px;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--zebra);}
+  thead th.num,tbody td.num{text-align:right;}
+  tbody tr:nth-child(even){background:var(--zebra);}
+  tbody td{padding:16px 20px;border-bottom:1px solid var(--line);font-size:15px;vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--brass-soft);}
+  .service-badge{display:inline-block;padding:4px 11px;border-radius:20px;background:var(--brass-soft);color:var(--brass);font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;}
+  .notes{font-size:13px;color:var(--muted);margin-top:6px;line-height:1.4;}
+  .unit{color:var(--muted);font-size:12px;}
+  .actions-cell{text-align:right;white-space:nowrap;}
+  .icon-btn{background:none;border:none;color:var(--muted);font-size:15px;width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;}
+  .icon-btn:hover{background:var(--line);color:var(--ink);}
+  .edit-btn{color:var(--brass);}
   .modal-backdrop{position:fixed;inset:0;background:rgba(31,42,36,.45);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50;}
   .modal{background:var(--paper);border-radius:6px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 50px rgba(0,0,0,.3);}
   .modal-head{display:flex;justify-content:space-between;align-items:center;padding:20px 24px;border-bottom:1px solid var(--line);}
   .modal-head h2{margin:0;font-size:22px;}
   .modal-body{padding:24px;display:flex;flex-direction:column;gap:18px;}
   .field{display:flex;flex-direction:column;gap:6px;}
-  .field span{font-size:13px;font-weight:600;color:#5B5546;}
-  input,select,textarea{border:1px solid var(--line);border-radius:4px;padding:10px 12px;font-size:15px;background:#fff;color:var(--ink);outline:none;font-family:inherit;width:100%;}
+  .field span{font-size:13px;font-weight:600;color:var(--field-label);}
+  input,select,textarea{border:1px solid var(--line);border-radius:4px;padding:10px 12px;font-size:15px;background:var(--surface);color:var(--ink);outline:none;font-family:inherit;width:100%;}
   input[type=range]{accent-color:var(--brass);padding:0;}
   .row2{display:flex;gap:12px;}
   .save-btn{margin-top:4px;background:var(--pew);color:var(--paper);border:none;border-radius:4px;padding:13px;font-size:15px;font-weight:700;}
   .close-x{background:none;border:none;color:var(--ink);font-size:20px;}
-  .error-banner{background:#F3E4DE;border:1px solid var(--rust);color:var(--rust);padding:10px 14px;border-radius:4px;margin-bottom:20px;font-size:14px;}
+  .error-banner{background:var(--banner-bg);border:1px solid var(--rust);color:var(--rust);padding:10px 14px;border-radius:4px;margin-bottom:20px;font-size:14px;}
   .chart-box{position:relative;height:260px;}
-  #config-warning{background:#F3E4DE;border:1px solid var(--rust);color:var(--rust);padding:16px 20px;border-radius:4px;margin:20px 0;font-size:14px;line-height:1.5;}
+  #config-warning{background:var(--banner-bg);border:1px solid var(--rust);color:var(--rust);padding:16px 20px;border-radius:4px;margin:20px 0;font-size:14px;line-height:1.5;}
   code{background:rgba(0,0,0,0.06);padding:1px 5px;border-radius:3px;}
+  [data-theme="dark"] code{background:rgba(255,255,255,0.1);}
+  .theme-toggle{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:3px;font-size:16px;}
+  .btn-secondary{display:flex;align-items:center;gap:8px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:3px;padding:12px 18px;font-size:15px;font-weight:600;}
+  .btn-secondary:disabled{opacity:.5;cursor:not-allowed;}
 </style>
 </head>
 <body>
@@ -65,10 +81,14 @@
   <div class="wrap">
     <div class="headtop">
       <div>
-        <div class="eyebrow">Skyline Church · NJ</div>
-        <h1 class="display">The Service Ledger</h1>
+        <img class="logo" id="logo-img" src="assets/1500w-skyline-identity-logo-blue-green-black-png.png" alt="Skyline Church">
+        <h1 class="display">Skyline Pulse</h1>
       </div>
-      <button class="btn-primary" id="open-form-btn">+ Log a Service</button>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="theme-toggle" id="theme-toggle" title="Toggle dark mode"></button>
+        <button class="btn-secondary" id="export-btn" title="Export ledger as CSV">⬇ Export</button>
+        <button class="btn-primary" id="open-form-btn">+ Log a Service</button>
+      </div>
     </div>
     <nav>
       <button id="tab-log" class="active">Ledger</button>
@@ -95,11 +115,28 @@ const SUPABASE_URL = "https://uvwgotklgfhvqbcpdqqb.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV2d2dvdGtsZ2ZodnFiY3BkcXFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0Nzc5NDQsImV4cCI6MjA5OTA1Mzk0NH0.gMBS_RU3yHkk2O7BjiUWwPOofLpiOtS0oOVylU9e2Dc";
 /* ============================================================== */
 
-const SERVICE_TYPES = ["Sunday AM", "Sunday PM", "Midweek", "Youth", "Special Event"];
+const SERVICE_TYPES = ["9:30 AM", "11:00 AM", "Worship Night", "SkyYouth", "Special Event"];
+const LOGO_LIGHT = "assets/1500w-skyline-identity-logo-blue-green-black-png.png";
+const LOGO_DARK = "assets/skyline-dark-logo.png";
 let sb = null;
 let entries = [];
 let view = "log";
 let charts = [];
+
+function getStoredTheme() {
+  return localStorage.getItem("skyline-theme") ||
+    (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+}
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("skyline-theme", theme);
+  document.getElementById("theme-toggle").textContent = theme === "dark" ? "☀" : "☾";
+  document.getElementById("logo-img").src = theme === "dark" ? LOGO_DARK : LOGO_LIGHT;
+  if (view === "analytics" && charts.length) { destroyCharts(); renderCharts(); }
+}
+function toggleTheme() {
+  applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+}
 
 function configured() {
   return SUPABASE_URL !== "YOUR_SUPABASE_PROJECT_URL" && SUPABASE_ANON_KEY !== "YOUR_SUPABASE_ANON_KEY";
@@ -136,12 +173,21 @@ async function removeEntry(id) {
   await loadEntries();
 }
 
+async function updateEntry(id, payload) {
+  const { error } = await sb.from("service_entries").update(payload).eq("id", id);
+  if (error) { showError("Couldn't save: " + error.message); return false; }
+  showError("");
+  await loadEntries();
+  return true;
+}
+
 function destroyCharts() { charts.forEach(c => c.destroy()); charts = []; }
 
 function render() {
   const content = document.getElementById("content");
   document.getElementById("tab-log").classList.toggle("active", view === "log");
   document.getElementById("tab-analytics").classList.toggle("active", view === "analytics");
+  document.getElementById("export-btn").disabled = entries.length === 0;
   destroyCharts();
 
   if (!configured()) {
@@ -167,6 +213,9 @@ function render() {
     content.querySelectorAll(".del-btn").forEach(btn => {
       btn.addEventListener("click", () => removeEntry(btn.dataset.id));
     });
+    content.querySelectorAll(".edit-btn").forEach(btn => {
+      btn.addEventListener("click", () => openModal(entries.find(e => e.id === btn.dataset.id)));
+    });
   } else {
     content.innerHTML = renderAnalyticsShell();
     renderCharts();
@@ -177,21 +226,45 @@ function renderLog() {
   const rows = entries.map(e => `
     <tr>
       <td>${fmtDate(e.service_date)}</td>
-      <td><strong>${e.service_type}</strong>${e.notes ? `<div class="notes">${escapeHtml(e.notes)}</div>` : ""}</td>
-      <td>${e.attendance}</td>
-      <td>${e.unity}/5</td>
-      <td>${e.engagement}/5</td>
-      <td>${e.loudness_db}</td>
-      <td><button class="del-btn" data-id="${e.id}" title="Delete">✕</button></td>
+      <td><span class="service-badge">${escapeHtml(e.service_type)}</span>${e.notes ? `<div class="notes">${escapeHtml(e.notes)}</div>` : ""}</td>
+      <td class="num">${e.attendance.toLocaleString()}</td>
+      <td class="num">${e.unity}<span class="unit">/5</span></td>
+      <td class="num">${e.engagement}<span class="unit">/5</span></td>
+      <td class="num">${e.loudness_db}<span class="unit"> dB</span></td>
+      <td class="actions-cell">
+        <button class="icon-btn edit-btn" data-id="${e.id}" title="Edit">✎</button>
+        <button class="icon-btn del-btn" data-id="${e.id}" title="Delete">✕</button>
+      </td>
     </tr>`).join("");
   return `<table>
-    <thead><tr><th>Date</th><th>Service</th><th>Attend.</th><th>Unity</th><th>Engage.</th><th>dB</th><th></th></tr></thead>
+    <thead><tr><th>Date</th><th>Service</th><th class="num">Attend.</th><th class="num">Unity</th><th class="num">Engage.</th><th class="num">dB</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }
 
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+
+function csvEscape(val) {
+  const s = String(val ?? "");
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function exportCSV() {
+  if (!entries.length) return;
+  const header = ["Date", "Service", "Attendance", "Unity (1-5)", "Engagement (1-5)", "Loudness (dB)", "Notes"];
+  const rows = entries.map(e => [e.service_date, e.service_type, e.attendance, e.unity, e.engagement, e.loudness_db, e.notes || ""]);
+  const csv = [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `skyline-pulse-ledger-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function renderAnalyticsShell() {
@@ -214,53 +287,75 @@ function renderAnalyticsShell() {
   `;
 }
 
+function themeColors() {
+  const cs = getComputedStyle(document.documentElement);
+  const v = (name) => cs.getPropertyValue(name).trim();
+  return { ink: v("--ink"), pew: v("--pew"), brass: v("--brass"), rust: v("--rust"), line: v("--line") };
+}
+
 function renderCharts() {
   const sorted = [...entries].sort((a,b) => a.service_date.localeCompare(b.service_date)).slice(-8);
   const labels = sorted.map(e => fmtDate(e.service_date));
+  const t = themeColors();
+  Chart.defaults.color = t.ink;
+  Chart.defaults.borderColor = t.line;
 
   const c1 = new Chart(document.getElementById("chart-attendance"), {
     type: "bar",
-    data: { labels, datasets: [{ label: "Attendance", data: sorted.map(e=>e.attendance), backgroundColor: "#3D5A4C", borderRadius: 3 }] },
-    options: { plugins: { legend: { display: false } }, scales: { x: { grid: { display:false } }, y: { grid: { color:"#D8D1C0" } } } }
+    data: { labels, datasets: [{ label: "Attendance", data: sorted.map(e=>e.attendance), backgroundColor: t.pew, borderRadius: 3 }] },
+    options: { plugins: { legend: { display: false } }, scales: { x: { grid: { display:false } }, y: { grid: { color:t.line } } } }
   });
 
   const c2 = new Chart(document.getElementById("chart-unity"), {
     type: "line",
     data: { labels, datasets: [
-      { label: "Unity", data: sorted.map(e=>e.unity), borderColor: "#B8925A", backgroundColor:"#B8925A", tension:.3 },
-      { label: "Engagement", data: sorted.map(e=>e.engagement), borderColor: "#A6503C", backgroundColor:"#A6503C", tension:.3 },
+      { label: "Unity", data: sorted.map(e=>e.unity), borderColor: t.brass, backgroundColor:t.brass, tension:.3 },
+      { label: "Engagement", data: sorted.map(e=>e.engagement), borderColor: t.rust, backgroundColor:t.rust, tension:.3 },
     ]},
-    options: { scales: { y: { min:0, max:5, grid:{color:"#D8D1C0"} }, x:{grid:{display:false}} } }
+    options: { scales: { y: { min:0, max:5, grid:{color:t.line} }, x:{grid:{display:false}} } }
   });
 
   const c3 = new Chart(document.getElementById("chart-loudness"), {
     type: "line",
-    data: { labels, datasets: [{ label: "Loudness (dB)", data: sorted.map(e=>e.loudness_db), borderColor: "#3D5A4C", backgroundColor:"#3D5A4C", tension:.3 }] },
-    options: { plugins: { legend: { display:false } }, scales: { x:{grid:{display:false}}, y:{grid:{color:"#D8D1C0"}} } }
+    data: { labels, datasets: [{ label: "Loudness (dB)", data: sorted.map(e=>e.loudness_db), borderColor: t.pew, backgroundColor:t.pew, tension:.3 }] },
+    options: { plugins: { legend: { display:false } }, scales: { x:{grid:{display:false}}, y:{grid:{color:t.line}} } }
   });
 
   charts = [c1, c2, c3];
 }
 
-function openModal() {
+function openModal(entry) {
+  const editing = !!entry;
   const today = new Date().toISOString().slice(0,10);
+  const v = {
+    date: entry ? entry.service_date : today,
+    service: entry ? entry.service_type : "",
+    attendance: entry ? entry.attendance : "",
+    unity: entry ? entry.unity : 3,
+    engagement: entry ? entry.engagement : 3,
+    loudness: entry ? entry.loudness_db : "",
+    notes: entry ? (entry.notes || "") : "",
+  };
   document.getElementById("modal-slot").innerHTML = `
     <div class="modal-backdrop" id="modal-backdrop">
       <div class="modal">
-        <div class="modal-head"><h2 class="display">Log a Service</h2><button class="close-x" id="modal-close">✕</button></div>
+        <div class="modal-head"><h2 class="display">${editing ? "Edit Service" : "Log a Service"}</h2><button class="close-x" id="modal-close">✕</button></div>
         <div class="modal-body">
           <div class="row2">
-            <label class="field" style="flex:1"><span>Date</span><input type="date" id="f-date" value="${today}"></label>
-            <label class="field" style="flex:1"><span>Service</span>
-              <select id="f-service">${SERVICE_TYPES.map(s=>`<option value="${s}">${s}</option>`).join("")}</select>
+            <label class="field" style="flex:1"><span>Date</span><input type="date" id="f-date" value="${v.date}"></label>
+            <label class="field" style="flex:1"><span>Service *</span>
+              <select id="f-service" required>
+                <option value="" ${v.service?"":"selected"} disabled>Select a service…</option>
+                ${SERVICE_TYPES.map(s=>`<option value="${s}" ${s===v.service?"selected":""}>${s}</option>`).join("")}
+              </select>
             </label>
           </div>
-          <label class="field"><span>Attendance (headcount)</span><input type="number" min="0" id="f-attendance" placeholder="e.g. 214"></label>
-          <label class="field"><span id="unity-label">Oneness in One Voice (worship unity) — 3/5</span><input type="range" min="1" max="5" value="3" id="f-unity"></label>
-          <label class="field"><span id="engagement-label">Audience Engagement — 3/5</span><input type="range" min="1" max="5" value="3" id="f-engagement"></label>
-          <label class="field"><span>Loudness (dB)</span><input type="number" min="0" id="f-loudness" placeholder="e.g. 92"></label>
-          <label class="field"><span>Notes (optional)</span><textarea rows="2" id="f-notes" placeholder="Anything worth remembering about this service…"></textarea></label>
-          <button class="save-btn" id="f-save">Save Entry</button>
+          <label class="field"><span>Attendance (headcount)</span><input type="number" min="0" id="f-attendance" placeholder="e.g. 214" value="${v.attendance}"></label>
+          <label class="field"><span id="unity-label">Oneness in One Voice (worship unity) — ${v.unity}/5</span><input type="range" min="1" max="5" value="${v.unity}" id="f-unity"></label>
+          <label class="field"><span id="engagement-label">Audience Engagement — ${v.engagement}/5</span><input type="range" min="1" max="5" value="${v.engagement}" id="f-engagement"></label>
+          <label class="field"><span>Loudness (dB)</span><input type="number" min="0" id="f-loudness" placeholder="e.g. 92" value="${v.loudness}"></label>
+          <label class="field"><span>Notes (optional)</span><textarea rows="2" id="f-notes" placeholder="Anything worth remembering about this service…">${escapeHtml(v.notes)}</textarea></label>
+          <button class="save-btn" id="f-save">${editing ? "Update Entry" : "Save Entry"}</button>
         </div>
       </div>
     </div>`;
@@ -276,25 +371,31 @@ function openModal() {
   document.getElementById("f-save").addEventListener("click", async () => {
     const attendance = document.getElementById("f-attendance").value;
     const loudness = document.getElementById("f-loudness").value;
+    const serviceType = document.getElementById("f-service").value;
+    if (!serviceType) { showError("Please select a service."); return; }
     if (!attendance || !loudness) { showError("Attendance and loudness (dB) are required."); return; }
     const payload = {
       service_date: document.getElementById("f-date").value,
-      service_type: document.getElementById("f-service").value,
+      service_type: serviceType,
       attendance: Number(attendance),
       unity: Number(document.getElementById("f-unity").value),
       engagement: Number(document.getElementById("f-engagement").value),
       loudness_db: Number(loudness),
       notes: document.getElementById("f-notes").value.trim(),
     };
-    const ok = await addEntry(payload);
+    const ok = editing ? await updateEntry(entry.id, payload) : await addEntry(payload);
     if (ok) closeModal();
   });
 }
 function closeModal() { document.getElementById("modal-slot").innerHTML = ""; }
 
-document.getElementById("open-form-btn").addEventListener("click", openModal);
+document.getElementById("open-form-btn").addEventListener("click", () => openModal());
 document.getElementById("tab-log").addEventListener("click", () => { view = "log"; render(); });
 document.getElementById("tab-analytics").addEventListener("click", () => { view = "analytics"; render(); });
+document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
+document.getElementById("export-btn").addEventListener("click", exportCSV);
+
+applyTheme(getStoredTheme());
 
 if (configured()) {
   sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
