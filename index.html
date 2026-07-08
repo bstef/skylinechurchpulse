@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Skyline Church · Service Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --ink:#1F2A24; --paper:#F6F3EC; --brass:#B8925A; --pew:#3D5A4C; --rust:#A6503C; --line:#D8D1C0; --muted:#8A8375;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Source Sans 3',sans-serif;}
+  .display{font-family:'Fraunces',Georgia,serif;}
+  header{border-bottom:1px solid var(--line);}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px;}
+  .headtop{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;padding:28px 0 20px;}
+  .eyebrow{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--brass);font-weight:600;margin-bottom:6px;}
+  h1{font-size:40px;font-weight:700;margin:0;line-height:1;}
+  button{cursor:pointer;font-family:inherit;}
+  .btn-primary{display:flex;align-items:center;gap:8px;background:var(--pew);color:var(--paper);border:none;border-radius:3px;padding:12px 20px;font-size:15px;font-weight:600;box-shadow:0 2px 0 rgba(0,0,0,.15);}
+  nav{display:flex;gap:4px;margin-top:24px;}
+  nav button{padding:9px 18px;border:none;background:transparent;color:var(--ink);font-size:14px;font-weight:600;border-radius:3px 3px 0 0;}
+  nav button.active{background:var(--ink);color:var(--paper);}
+  main{max-width:1080px;margin:0 auto;padding:32px 24px 80px;}
+  .empty{text-align:center;padding:80px 20px;color:var(--muted);}
+  .empty .display{font-size:22px;margin-bottom:8px;color:var(--ink);}
+  .stats{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:32px;}
+  .pill{background:#fff;border:1px solid var(--line);border-radius:4px;padding:18px 20px;flex:1 1 200px;}
+  .pill .label{display:flex;align-items:center;gap:8px;color:var(--brass);margin-bottom:8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;}
+  .pill .value{font-size:30px;font-weight:700;font-family:'Fraunces',Georgia,serif;}
+  .pill .value span{font-size:16px;font-weight:400;color:var(--muted);}
+  .card{background:#fff;border:1px solid var(--line);border-radius:4px;padding:24px;margin-bottom:24px;}
+  .card h3{margin:0 0 20px;font-size:18px;}
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:4px;overflow:hidden;}
+  thead th{text-align:left;padding:12px 20px;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;}
+  tbody td{padding:14px 20px;border-bottom:1px solid var(--line);font-size:15px;vertical-align:top;}
+  tbody tr:hover{background:rgba(184,146,90,0.08);}
+  .notes{font-size:13px;color:var(--muted);margin-top:2px;}
+  .del-btn{background:none;border:none;color:#C9C2B2;font-size:16px;}
+  .modal-backdrop{position:fixed;inset:0;background:rgba(31,42,36,.45);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50;}
+  .modal{background:var(--paper);border-radius:6px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 50px rgba(0,0,0,.3);}
+  .modal-head{display:flex;justify-content:space-between;align-items:center;padding:20px 24px;border-bottom:1px solid var(--line);}
+  .modal-head h2{margin:0;font-size:22px;}
+  .modal-body{padding:24px;display:flex;flex-direction:column;gap:18px;}
+  .field{display:flex;flex-direction:column;gap:6px;}
+  .field span{font-size:13px;font-weight:600;color:#5B5546;}
+  input,select,textarea{border:1px solid var(--line);border-radius:4px;padding:10px 12px;font-size:15px;background:#fff;color:var(--ink);outline:none;font-family:inherit;width:100%;}
+  input[type=range]{accent-color:var(--brass);padding:0;}
+  .row2{display:flex;gap:12px;}
+  .save-btn{margin-top:4px;background:var(--pew);color:var(--paper);border:none;border-radius:4px;padding:13px;font-size:15px;font-weight:700;}
+  .close-x{background:none;border:none;color:var(--ink);font-size:20px;}
+  .error-banner{background:#F3E4DE;border:1px solid var(--rust);color:var(--rust);padding:10px 14px;border-radius:4px;margin-bottom:20px;font-size:14px;}
+  .chart-box{position:relative;height:260px;}
+  #config-warning{background:#F3E4DE;border:1px solid var(--rust);color:var(--rust);padding:16px 20px;border-radius:4px;margin:20px 0;font-size:14px;line-height:1.5;}
+  code{background:rgba(0,0,0,0.06);padding:1px 5px;border-radius:3px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="headtop">
+      <div>
+        <div class="eyebrow">Skyline Church · NJ</div>
+        <h1 class="display">The Service Ledger</h1>
+      </div>
+      <button class="btn-primary" id="open-form-btn">+ Log a Service</button>
+    </div>
+    <nav>
+      <button id="tab-log" class="active">Ledger</button>
+      <button id="tab-analytics">Analytics</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div id="error-slot"></div>
+  <div id="config-slot"></div>
+  <div id="content"></div>
+</main>
+
+<div id="modal-slot"></div>
+
+<script>
+/* ====================== CONFIGURE THIS ======================
+   Paste your Supabase project URL and anon (public) key below.
+   Both are safe to expose in frontend code — access is controlled
+   by the Row Level Security policies in schema.sql.
+   ============================================================== */
+const SUPABASE_URL = "https://uvwgotklgfhvqbcpdqqb.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV2d2dvdGtsZ2ZodnFiY3BkcXFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0Nzc5NDQsImV4cCI6MjA5OTA1Mzk0NH0.gMBS_RU3yHkk2O7BjiUWwPOofLpiOtS0oOVylU9e2Dc";
+/* ============================================================== */
+
+const SERVICE_TYPES = ["Sunday AM", "Sunday PM", "Midweek", "Youth", "Special Event"];
+let supabase = null;
+let entries = [];
+let view = "log";
+let charts = [];
+
+function configured() {
+  return SUPABASE_URL !== "YOUR_SUPABASE_PROJECT_URL" && SUPABASE_ANON_KEY !== "YOUR_SUPABASE_ANON_KEY";
+}
+
+function fmtDate(d) {
+  const dt = new Date(d + "T12:00:00");
+  return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+function avg(arr) { return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
+function showError(msg) {
+  document.getElementById("error-slot").innerHTML = msg ? `<div class="error-banner">${msg}</div>` : "";
+}
+
+async function loadEntries() {
+  if (!configured()) return;
+  const { data, error } = await supabase.from("service_entries").select("*").order("service_date", { ascending: false });
+  if (error) { showError("Couldn't load entries: " + error.message); return; }
+  entries = data;
+  render();
+}
+
+async function addEntry(payload) {
+  const { error } = await supabase.from("service_entries").insert([payload]);
+  if (error) { showError("Couldn't save: " + error.message); return false; }
+  showError("");
+  await loadEntries();
+  return true;
+}
+
+async function removeEntry(id) {
+  const { error } = await supabase.from("service_entries").delete().eq("id", id);
+  if (error) { showError("Couldn't delete: " + error.message); return; }
+  await loadEntries();
+}
+
+function destroyCharts() { charts.forEach(c => c.destroy()); charts = []; }
+
+function render() {
+  const content = document.getElementById("content");
+  document.getElementById("tab-log").classList.toggle("active", view === "log");
+  document.getElementById("tab-analytics").classList.toggle("active", view === "analytics");
+  destroyCharts();
+
+  if (!configured()) {
+    document.getElementById("config-slot").innerHTML = `<div id="config-warning">
+      <strong>Not connected yet.</strong> Open <code>index.html</code> and set <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> at the top of the script to your Supabase project's values, then redeploy.
+    </div>`;
+    content.innerHTML = "";
+    return;
+  } else {
+    document.getElementById("config-slot").innerHTML = "";
+  }
+
+  if (entries.length === 0) {
+    content.innerHTML = `<div class="empty">
+      <div class="display">The ledger is empty.</div>
+      <div>Log your first service to start tracking attendance, unity, engagement, and loudness.</div>
+    </div>`;
+    return;
+  }
+
+  if (view === "log") {
+    content.innerHTML = renderLog();
+    content.querySelectorAll(".del-btn").forEach(btn => {
+      btn.addEventListener("click", () => removeEntry(btn.dataset.id));
+    });
+  } else {
+    content.innerHTML = renderAnalyticsShell();
+    renderCharts();
+  }
+}
+
+function renderLog() {
+  const rows = entries.map(e => `
+    <tr>
+      <td>${fmtDate(e.service_date)}</td>
+      <td><strong>${e.service_type}</strong>${e.notes ? `<div class="notes">${escapeHtml(e.notes)}</div>` : ""}</td>
+      <td>${e.attendance}</td>
+      <td>${e.unity}/5</td>
+      <td>${e.engagement}/5</td>
+      <td>${e.loudness_db}</td>
+      <td><button class="del-btn" data-id="${e.id}" title="Delete">✕</button></td>
+    </tr>`).join("");
+  return `<table>
+    <thead><tr><th>Date</th><th>Service</th><th>Attend.</th><th>Unity</th><th>Engage.</th><th>dB</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+
+function renderAnalyticsShell() {
+  const sorted = [...entries].sort((a,b) => a.service_date.localeCompare(b.service_date));
+  const avgAttendance = avg(entries.map(e => e.attendance));
+  const avgUnity = avg(entries.map(e => e.unity));
+  const avgEngagement = avg(entries.map(e => e.engagement));
+  const avgLoudness = avg(entries.map(e => e.loudness_db));
+
+  return `
+    <div class="stats">
+      <div class="pill"><div class="label">Avg Attendance</div><div class="value">${avgAttendance.toFixed(0)}</div></div>
+      <div class="pill"><div class="label">Avg Unity</div><div class="value">${avgUnity.toFixed(1)}<span>/5</span></div></div>
+      <div class="pill"><div class="label">Avg Engagement</div><div class="value">${avgEngagement.toFixed(1)}<span>/5</span></div></div>
+      <div class="pill"><div class="label">Avg Loudness</div><div class="value">${avgLoudness.toFixed(0)}<span> dB</span></div></div>
+    </div>
+    <div class="card"><h3 class="display">Attendance, last ${Math.min(sorted.length,8)} services</h3><div class="chart-box"><canvas id="chart-attendance"></canvas></div></div>
+    <div class="card"><h3 class="display">Unity &amp; Engagement (1–5)</h3><div class="chart-box"><canvas id="chart-unity"></canvas></div></div>
+    <div class="card"><h3 class="display">Loudness (dB)</h3><div class="chart-box"><canvas id="chart-loudness"></canvas></div></div>
+  `;
+}
+
+function renderCharts() {
+  const sorted = [...entries].sort((a,b) => a.service_date.localeCompare(b.service_date)).slice(-8);
+  const labels = sorted.map(e => fmtDate(e.service_date));
+
+  const c1 = new Chart(document.getElementById("chart-attendance"), {
+    type: "bar",
+    data: { labels, datasets: [{ label: "Attendance", data: sorted.map(e=>e.attendance), backgroundColor: "#3D5A4C", borderRadius: 3 }] },
+    options: { plugins: { legend: { display: false } }, scales: { x: { grid: { display:false } }, y: { grid: { color:"#D8D1C0" } } } }
+  });
+
+  const c2 = new Chart(document.getElementById("chart-unity"), {
+    type: "line",
+    data: { labels, datasets: [
+      { label: "Unity", data: sorted.map(e=>e.unity), borderColor: "#B8925A", backgroundColor:"#B8925A", tension:.3 },
+      { label: "Engagement", data: sorted.map(e=>e.engagement), borderColor: "#A6503C", backgroundColor:"#A6503C", tension:.3 },
+    ]},
+    options: { scales: { y: { min:0, max:5, grid:{color:"#D8D1C0"} }, x:{grid:{display:false}} } }
+  });
+
+  const c3 = new Chart(document.getElementById("chart-loudness"), {
+    type: "line",
+    data: { labels, datasets: [{ label: "Loudness (dB)", data: sorted.map(e=>e.loudness_db), borderColor: "#3D5A4C", backgroundColor:"#3D5A4C", tension:.3 }] },
+    options: { plugins: { legend: { display:false } }, scales: { x:{grid:{display:false}}, y:{grid:{color:"#D8D1C0"}} } }
+  });
+
+  charts = [c1, c2, c3];
+}
+
+function openModal() {
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById("modal-slot").innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal">
+        <div class="modal-head"><h2 class="display">Log a Service</h2><button class="close-x" id="modal-close">✕</button></div>
+        <div class="modal-body">
+          <div class="row2">
+            <label class="field" style="flex:1"><span>Date</span><input type="date" id="f-date" value="${today}"></label>
+            <label class="field" style="flex:1"><span>Service</span>
+              <select id="f-service">${SERVICE_TYPES.map(s=>`<option value="${s}">${s}</option>`).join("")}</select>
+            </label>
+          </div>
+          <label class="field"><span>Attendance (headcount)</span><input type="number" min="0" id="f-attendance" placeholder="e.g. 214"></label>
+          <label class="field"><span id="unity-label">Oneness in One Voice (worship unity) — 3/5</span><input type="range" min="1" max="5" value="3" id="f-unity"></label>
+          <label class="field"><span id="engagement-label">Audience Engagement — 3/5</span><input type="range" min="1" max="5" value="3" id="f-engagement"></label>
+          <label class="field"><span>Loudness (dB)</span><input type="number" min="0" id="f-loudness" placeholder="e.g. 92"></label>
+          <label class="field"><span>Notes (optional)</span><textarea rows="2" id="f-notes" placeholder="Anything worth remembering about this service…"></textarea></label>
+          <button class="save-btn" id="f-save">Save Entry</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById("modal-close").addEventListener("click", closeModal);
+  document.getElementById("modal-backdrop").addEventListener("click", (e) => { if (e.target.id === "modal-backdrop") closeModal(); });
+  document.getElementById("f-unity").addEventListener("input", (e) => {
+    document.getElementById("unity-label").textContent = `Oneness in One Voice (worship unity) — ${e.target.value}/5`;
+  });
+  document.getElementById("f-engagement").addEventListener("input", (e) => {
+    document.getElementById("engagement-label").textContent = `Audience Engagement — ${e.target.value}/5`;
+  });
+  document.getElementById("f-save").addEventListener("click", async () => {
+    const attendance = document.getElementById("f-attendance").value;
+    const loudness = document.getElementById("f-loudness").value;
+    if (!attendance || !loudness) { showError("Attendance and loudness (dB) are required."); return; }
+    const payload = {
+      service_date: document.getElementById("f-date").value,
+      service_type: document.getElementById("f-service").value,
+      attendance: Number(attendance),
+      unity: Number(document.getElementById("f-unity").value),
+      engagement: Number(document.getElementById("f-engagement").value),
+      loudness_db: Number(loudness),
+      notes: document.getElementById("f-notes").value.trim(),
+    };
+    const ok = await addEntry(payload);
+    if (ok) closeModal();
+  });
+}
+function closeModal() { document.getElementById("modal-slot").innerHTML = ""; }
+
+document.getElementById("open-form-btn").addEventListener("click", openModal);
+document.getElementById("tab-log").addEventListener("click", () => { view = "log"; render(); });
+document.getElementById("tab-analytics").addEventListener("click", () => { view = "analytics"; render(); });
+
+if (configured()) {
+  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  loadEntries();
+} else {
+  render();
+}
+</script>
+</body>
+</html>
