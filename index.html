@@ -223,7 +223,6 @@ let pcoFilterType = "All";
 let calendarMonth = null;
 
 function getCalendarEvents() {
-  const loggedIds = new Set(entries.filter(e => e.pco_plan_id).map(e => e.pco_plan_id));
   const events = entries.map(e => ({
     date: e.service_date,
     kind: "entry",
@@ -233,12 +232,14 @@ function getCalendarEvents() {
     logged: true,
   }));
   pcoPlans.forEach(p => {
-    if (loggedIds.has(p.id)) return;
+    const matched = guessServiceType(p.plan_time_name || p.service_type_name);
+    const alreadyLogged = entries.some(e => e.pco_plan_id === p.plan_id && (!matched || e.service_type === matched));
+    if (alreadyLogged) return;
     events.push({
       date: p.sort_date.slice(0, 10),
       kind: "pco",
       id: p.id,
-      serviceType: guessServiceType(p.service_type_name),
+      serviceType: matched,
       label: p.title,
       logged: false,
     });
@@ -626,11 +627,12 @@ function renderPco() {
   });
 
   const rows = filteredPlans.map(p => {
-    const matched = guessServiceType(p.service_type_name);
+    const matchSource = p.plan_time_name || p.service_type_name;
+    const matched = guessServiceType(matchSource);
     const badge = matched
       ? `<span class="service-badge ${badgeClass(matched)}">${escapeHtml(matched)}</span>`
-      : `<span class="service-badge badge-unmatched">${escapeHtml(p.service_type_name)}</span>`;
-    const linked = entriesByPlan[p.id] || [];
+      : `<span class="service-badge badge-unmatched">${escapeHtml(matchSource)}</span>`;
+    const linked = (entriesByPlan[p.plan_id] || []).filter(e => !matched || e.service_type === matched);
     const loggedPills = linked.map(e =>
       `<button class="status-pill status-logged pco-view-btn" data-id="${escapeHtml(e.id)}">${escapeHtml(e.service_type)} ✓</button>`
     ).join("");
@@ -749,7 +751,7 @@ function openModal(entry, pcoPlan) {
   const today = new Date().toISOString().slice(0,10);
   const v = {
     date: entry ? entry.service_date : (pcoPlan ? pcoPlan.sort_date.slice(0,10) : today),
-    service: entry ? entry.service_type : (pcoPlan ? guessServiceType(pcoPlan.service_type_name) : ""),
+    service: entry ? entry.service_type : (pcoPlan ? guessServiceType(pcoPlan.plan_time_name || pcoPlan.service_type_name) : ""),
     attendance: entry ? entry.attendance : "",
     unity: entry ? entry.unity : 3,
     engagement: entry ? entry.engagement : 3,
@@ -768,7 +770,7 @@ function openModal(entry, pcoPlan) {
       <div class="modal">
         <div class="modal-head"><h2 class="display">${editing ? "Edit Service" : "Log a Service"}</h2><button class="close-x" id="modal-close">✕</button></div>
         <div class="modal-body">
-          ${pcoPlan ? `<div class="pco-linked-note">From Planning Center: <strong>${escapeHtml(pcoPlan.title)}</strong></div>` : ""}
+          ${pcoPlan ? `<div class="pco-linked-note">From Planning Center: <strong>${escapeHtml(pcoPlan.title)}${pcoPlan.plan_time_name ? " · " + escapeHtml(pcoPlan.plan_time_name) : ""}</strong></div>` : ""}
           <div class="row2">
             <label class="field" style="flex:1"><span>Date</span><input type="date" id="f-date" value="${v.date}"></label>
             <label class="field" style="flex:1"><span>Service *</span>
@@ -839,7 +841,7 @@ function openModal(entry, pcoPlan) {
       announcements_fit: document.getElementById("f-announcements").value === "yes",
       sermon_fit: document.getElementById("f-sermon").value === "yes",
       notes: document.getElementById("f-notes").value.trim(),
-      pco_plan_id: entry ? (entry.pco_plan_id ?? null) : (pcoPlan ? pcoPlan.id : null),
+      pco_plan_id: entry ? (entry.pco_plan_id ?? null) : (pcoPlan ? pcoPlan.plan_id : null),
     };
     const ok = editing ? await updateEntry(entry.id, payload) : await addEntry(payload);
     if (ok) closeModal();

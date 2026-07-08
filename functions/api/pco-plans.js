@@ -59,10 +59,10 @@ export async function onRequestGet(context) {
       return [];
     }
     const body = await res.json();
-    return body.data
+    const rawPlans = body.data
       .filter(p => p.attributes.sort_date)
       .map(p => ({
-        id: p.id,
+        plan_id: p.id,
         title: p.attributes.title || st.name,
         series_title: p.attributes.series_title || "",
         service_type_id: st.id,
@@ -73,6 +73,33 @@ export async function onRequestGet(context) {
         const t = new Date(p.sort_date).getTime();
         return t >= windowStart && t <= windowEnd;
       });
+
+    // A single Plan can represent more than one physical gathering (e.g. one
+    // "Celebration Service" Plan covers both a 9:30am and 11:00am service,
+    // each as its own PlanTime). Expand each Plan into one row per actual
+    // service time so they show up — and auto-match to a service type —
+    // separately, instead of one ambiguous row.
+    const expanded = await Promise.all(rawPlans.map(async (plan) => {
+      let times = [];
+      try {
+        const timesRes = await fetch(`${PCO_BASE}/service_types/${st.id}/plans/${plan.plan_id}/plan_times`, { headers });
+        if (timesRes.ok) {
+          const timesBody = await timesRes.json();
+          times = timesBody.data.filter(t => t.attributes.time_type === "service" && t.attributes.starts_at);
+        }
+      } catch (err) {
+        // ignore — fall back to the plan-level date/name below
+      }
+      if (times.length === 0) return [plan];
+      return times.map(t => ({
+        ...plan,
+        id: `${plan.plan_id}:${t.id}`,
+        sort_date: t.attributes.starts_at,
+        plan_time_name: t.attributes.name || "",
+      }));
+    }));
+
+    return expanded.flat().map(p => ({ ...p, id: p.id || p.plan_id }));
   }));
 
   const plans = plansPerType.flat().sort((a, b) => a.sort_date.localeCompare(b.sort_date));
