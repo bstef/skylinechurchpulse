@@ -8,6 +8,11 @@ create table if not exists public.service_entries (
   unity smallint not null check (unity between 1 and 5),
   engagement smallint not null check (engagement between 1 and 5),
   loudness_db integer not null,
+  sound_clarity boolean not null default false,
+  spiritual_response smallint not null default 5 check (spiritual_response between 0 and 10),
+  transition_clarity smallint not null default 3 check (transition_clarity between 1 and 5),
+  propresenter_ready boolean not null default false,
+  video_download_trained boolean not null default false,
   notes text default '',
   pco_plan_id text,
   created_at timestamptz not null default now(),
@@ -33,6 +38,19 @@ alter table public.service_entries
   drop constraint if exists service_entries_pco_plan_id_service_type_key;
 alter table public.service_entries
   add constraint service_entries_pco_plan_id_service_type_key unique (pco_plan_id, service_type);
+
+-- Additional room/team-experience measurements. Safe to re-run on a database
+-- that already has the table; existing rows backfill to each column's default.
+alter table public.service_entries
+  add column if not exists sound_clarity boolean not null default false;
+alter table public.service_entries
+  add column if not exists spiritual_response smallint not null default 5 check (spiritual_response between 0 and 10);
+alter table public.service_entries
+  add column if not exists transition_clarity smallint not null default 3 check (transition_clarity between 1 and 5);
+alter table public.service_entries
+  add column if not exists propresenter_ready boolean not null default false;
+alter table public.service_entries
+  add column if not exists video_download_trained boolean not null default false;
 
 -- Enable Row Level Security
 alter table public.service_entries enable row level security;
