@@ -149,6 +149,18 @@
   .cal-chip{border:none;border-radius:4px;padding:3px 6px;font-size:11px;font-weight:700;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
   .cal-chip:hover{opacity:.8;}
   .cal-chip.cal-chip-pending{background:transparent;border:1px dashed currentColor;}
+  .cal-view-toggle{display:flex;gap:4px;margin-bottom:16px;}
+  .cal-toggle-btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 16px;font-size:13px;font-weight:600;border-radius:4px;}
+  .cal-toggle-btn.active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+  .cal-daynum-clickable{cursor:pointer;}
+  .cal-daynum-clickable:hover{color:var(--brass);}
+  .cal-day-rollup{color:var(--muted);font-size:13px;margin-bottom:14px;}
+  .cal-day-list{display:flex;flex-direction:column;gap:10px;}
+  .cal-chip.cal-day-card{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px;white-space:normal;overflow:visible;}
+  .cal-chip.cal-day-card:hover{background:var(--brass-soft);}
+  .cal-day-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
+  .cal-day-card-stats{display:flex;flex-wrap:wrap;gap:16px;font-size:14px;color:var(--ink);}
+  .cal-day-card-stats strong{font-family:'Fraunces',Georgia,serif;font-size:17px;}
 </style>
 </head>
 <body>
@@ -230,6 +242,12 @@ let pcoLoaded = false;
 let pcoLoading = false;
 let pcoFilterTypes = new Set();
 let calendarMonth = null;
+let calendarView = "month";
+let calendarDay = null;
+
+function dateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 function getCalendarEvents() {
   const events = entries.map(e => ({
@@ -239,6 +257,7 @@ function getCalendarEvents() {
     serviceType: e.service_type,
     label: e.service_type,
     logged: true,
+    entry: e,
   }));
   pcoPlans.forEach(p => {
     const matched = guessServiceType(p.plan_time_name || p.service_type_name);
@@ -251,6 +270,7 @@ function getCalendarEvents() {
       serviceType: matched,
       label: p.title,
       logged: false,
+      plan: p,
     });
   });
   return events;
@@ -417,15 +437,39 @@ function render() {
 
   if (view === "calendar") {
     content.innerHTML = renderCalendar();
-    document.getElementById("cal-prev").addEventListener("click", () => {
-      calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
+    const viewMonthBtn = document.getElementById("cal-view-month");
+    const viewDayBtn = document.getElementById("cal-view-day");
+    if (viewMonthBtn) viewMonthBtn.addEventListener("click", () => { calendarView = "month"; render(); });
+    if (viewDayBtn) viewDayBtn.addEventListener("click", () => { calendarView = "day"; render(); });
+
+    const prevBtn = document.getElementById("cal-prev");
+    const nextBtn = document.getElementById("cal-next");
+    const todayBtn = document.getElementById("cal-today");
+    if (prevBtn) prevBtn.addEventListener("click", () => {
+      if (calendarView === "day") calendarDay = new Date(calendarDay.getFullYear(), calendarDay.getMonth(), calendarDay.getDate() - 1);
+      else calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
       render();
     });
-    document.getElementById("cal-next").addEventListener("click", () => {
-      calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
+    if (nextBtn) nextBtn.addEventListener("click", () => {
+      if (calendarView === "day") calendarDay = new Date(calendarDay.getFullYear(), calendarDay.getMonth(), calendarDay.getDate() + 1);
+      else calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
       render();
     });
-    document.getElementById("cal-today").addEventListener("click", () => { calendarMonth = null; render(); });
+    if (todayBtn) todayBtn.addEventListener("click", () => {
+      if (calendarView === "day") calendarDay = new Date();
+      else calendarMonth = null;
+      render();
+    });
+
+    content.querySelectorAll(".cal-daynum-clickable").forEach(el => {
+      el.addEventListener("click", () => {
+        const [y, m, d] = el.dataset.date.split("-").map(Number);
+        calendarDay = new Date(y, m - 1, d);
+        calendarView = "day";
+        render();
+      });
+    });
+
     content.querySelectorAll(".cal-chip").forEach(chip => {
       chip.addEventListener("click", () => {
         if (chip.dataset.kind === "entry") {
@@ -733,6 +777,14 @@ function renderPco() {
 }
 
 function renderCalendar() {
+  const toggle = `<div class="cal-view-toggle">
+    <button class="cal-toggle-btn ${calendarView === "month" ? "active" : ""}" id="cal-view-month">Month</button>
+    <button class="cal-toggle-btn ${calendarView === "day" ? "active" : ""}" id="cal-view-day">Day</button>
+  </div>`;
+  return toggle + (calendarView === "day" ? renderCalendarDay() : renderCalendarMonth());
+}
+
+function renderCalendarMonth() {
   if (!calendarMonth) {
     const t = new Date();
     calendarMonth = new Date(t.getFullYear(), t.getMonth(), 1);
@@ -742,7 +794,7 @@ function renderCalendar() {
   const monthLabel = calendarMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const firstDow = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = dateKey(new Date());
 
   const byDate = {};
   getCalendarEvents().forEach(ev => { (byDate[ev.date] ||= []).push(ev); });
@@ -769,7 +821,7 @@ function renderCalendar() {
       return `<button class="cal-chip ${badgeCls} ${statusCls}" data-kind="${ev.kind}" data-id="${escapeHtml(ev.id)}" title="${escapeHtml(ev.label)}">${escapeHtml(label)}</button>`;
     }).join("");
     cells += `<div class="cal-cell ${dateStr === todayStr ? "cal-cell-today" : ""}">
-      <div class="cal-daynum">${day}</div>
+      <div class="cal-daynum cal-daynum-clickable" data-date="${dateStr}">${day}</div>
       <div class="cal-chips">${chips}</div>
     </div>`;
   }
@@ -777,6 +829,64 @@ function renderCalendar() {
   return `${header}
     <div class="cal-grid cal-dow-row">${dowRow}</div>
     <div class="cal-grid">${cells}</div>`;
+}
+
+function renderCalendarDay() {
+  if (!calendarDay) calendarDay = new Date();
+  const dateStr = dateKey(calendarDay);
+  const dayLabel = calendarDay.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+
+  const header = `<div class="cal-header">
+    <button class="btn-secondary" id="cal-prev" title="Previous day">‹</button>
+    <h3 class="display" style="margin:0;min-width:280px;text-align:center;">${dayLabel}</h3>
+    <button class="btn-secondary" id="cal-next" title="Next day">›</button>
+    <button class="btn-secondary" id="cal-today" style="margin-left:auto;">Today</button>
+  </div>`;
+
+  const dayEvents = getCalendarEvents().filter(ev => ev.date === dateStr);
+
+  if (dayEvents.length === 0) {
+    return `${header}<div class="empty">
+      <div class="display">Nothing scheduled.</div>
+      <div>No logged services or Planning Center plans for this day.</div>
+    </div>`;
+  }
+
+  const loggedEvents = dayEvents.filter(ev => ev.logged);
+  const totalAttendance = loggedEvents.reduce((sum, ev) => sum + (ev.entry.attendance || 0), 0);
+  const rollup = loggedEvents.length
+    ? `<div class="cal-day-rollup">${loggedEvents.length} of ${dayEvents.length} logged · Combined attendance: ${totalAttendance.toLocaleString()}</div>`
+    : `<div class="cal-day-rollup">${dayEvents.length} plan${dayEvents.length === 1 ? "" : "s"}, none logged yet</div>`;
+
+  const cards = dayEvents.map(ev => {
+    const badgeCls = ev.serviceType ? badgeClass(ev.serviceType) : "badge-unmatched";
+    const label = ev.serviceType || ev.label;
+    if (ev.logged) {
+      const e = ev.entry;
+      return `<button class="cal-chip cal-day-card cal-day-card-logged" data-kind="entry" data-id="${escapeHtml(ev.id)}">
+        <div class="cal-day-card-head">
+          <span class="service-badge ${badgeCls}">${escapeHtml(label)}</span>
+          <span class="status-pill status-logged">Logged ✓</span>
+        </div>
+        <div class="cal-day-card-stats">
+          <span><strong>${e.attendance.toLocaleString()}</strong> attendance</span>
+          <span><strong>${e.unity}</strong>/5 unity</span>
+          <span><strong>${e.engagement}</strong>/5 engagement</span>
+          <span><strong>${e.loudness_db}</strong> dB</span>
+        </div>
+        ${e.notes ? `<div class="notes">${escapeHtml(e.notes)}</div>` : ""}
+      </button>`;
+    }
+    return `<button class="cal-chip cal-day-card" data-kind="pco" data-id="${escapeHtml(ev.id)}">
+      <div class="cal-day-card-head">
+        <span class="service-badge ${badgeCls}">${escapeHtml(label)}</span>
+        <span class="status-pill status-pending">Needs details</span>
+      </div>
+      <div class="notes">${escapeHtml(ev.label)}</div>
+    </button>`;
+  }).join("");
+
+  return `${header}${rollup}<div class="cal-day-list">${cards}</div>`;
 }
 
 function openDetail(entry) {
