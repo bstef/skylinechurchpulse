@@ -75,14 +75,20 @@ alter table public.service_entries enable row level security;
 -- Since this app uses a shared link with no login, allow anyone with the
 -- anon key (which is safe to expose in frontend code) to read/write.
 -- If you later add login, replace these with auth-scoped policies.
+-- Policies don't support "if not exists", so drop-then-create to stay
+-- safe to re-run.
+drop policy if exists "Allow anon read" on public.service_entries;
 create policy "Allow anon read" on public.service_entries
   for select using (true);
 
+drop policy if exists "Allow anon insert" on public.service_entries;
 create policy "Allow anon insert" on public.service_entries
   for insert with check (true);
 
+drop policy if exists "Allow anon update" on public.service_entries;
 create policy "Allow anon update" on public.service_entries
   for update using (true) with check (true);
 
+drop policy if exists "Allow anon delete" on public.service_entries;
 create policy "Allow anon delete" on public.service_entries
   for delete using (true);
