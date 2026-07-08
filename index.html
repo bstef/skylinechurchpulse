@@ -122,6 +122,19 @@
   .status-logged{background:var(--pew);color:var(--paper);}
   .status-pending{background:var(--brass-soft);color:var(--brass);border:1px solid var(--brass);}
   .pco-linked-note{background:var(--brass-soft);color:var(--brass);border-radius:4px;padding:10px 14px;font-size:13px;font-weight:600;margin-top:-8px;}
+  .cal-header{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
+  .cal-dow-row{margin-bottom:6px;}
+  .cal-dow{text-align:center;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:4px 0;}
+  .cal-cell{background:var(--surface);border:1px solid var(--line);border-radius:4px;min-height:96px;padding:8px;display:flex;flex-direction:column;gap:6px;}
+  .cal-cell-empty{background:transparent;border-color:transparent;}
+  .cal-cell-today{box-shadow:inset 0 0 0 1px var(--brass);}
+  .cal-daynum{font-size:12px;font-weight:700;color:var(--muted);}
+  .cal-cell-today .cal-daynum{color:var(--brass);}
+  .cal-chips{display:flex;flex-direction:column;gap:4px;}
+  .cal-chip{border:none;border-radius:4px;padding:3px 6px;font-size:11px;font-weight:700;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+  .cal-chip:hover{opacity:.8;}
+  .cal-chip.cal-chip-pending{background:transparent;border:1px dashed currentColor;}
 </style>
 </head>
 <body>
@@ -141,6 +154,7 @@
     </div>
     <nav>
       <button id="tab-log" class="active">Ledger</button>
+      <button id="tab-calendar">Calendar</button>
       <button id="tab-analytics">Analytics</button>
       <button id="tab-pco">Planning Center</button>
     </nav>
@@ -198,6 +212,31 @@ let filterType = "All";
 let pcoPlans = [];
 let pcoError = null;
 let pcoLoaded = false;
+let calendarMonth = null;
+
+function getCalendarEvents() {
+  const loggedIds = new Set(entries.filter(e => e.pco_plan_id).map(e => e.pco_plan_id));
+  const events = entries.map(e => ({
+    date: e.service_date,
+    kind: "entry",
+    id: e.id,
+    serviceType: e.service_type,
+    label: e.service_type,
+    logged: true,
+  }));
+  pcoPlans.forEach(p => {
+    if (loggedIds.has(p.id)) return;
+    events.push({
+      date: p.sort_date.slice(0, 10),
+      kind: "pco",
+      id: p.id,
+      serviceType: guessServiceType(p.service_type_name),
+      label: p.title,
+      logged: false,
+    });
+  });
+  return events;
+}
 
 function badgeClass(serviceType) {
   const idx = SERVICE_TYPES.indexOf(serviceType);
@@ -277,6 +316,7 @@ function destroyCharts() { charts.forEach(c => c.destroy()); charts = []; }
 function render() {
   const content = document.getElementById("content");
   document.getElementById("tab-log").classList.toggle("active", view === "log");
+  document.getElementById("tab-calendar").classList.toggle("active", view === "calendar");
   document.getElementById("tab-analytics").classList.toggle("active", view === "analytics");
   document.getElementById("tab-pco").classList.toggle("active", view === "pco");
   document.getElementById("export-btn").disabled = entries.length === 0;
@@ -303,6 +343,32 @@ function render() {
       btn.addEventListener("click", () => {
         const entry = entries.find(e => e.pco_plan_id === btn.dataset.id);
         if (entry) openDetail(entry);
+      });
+    });
+    if (!pcoLoaded) loadPcoPlans();
+    return;
+  }
+
+  if (view === "calendar") {
+    content.innerHTML = renderCalendar();
+    document.getElementById("cal-prev").addEventListener("click", () => {
+      calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
+      render();
+    });
+    document.getElementById("cal-next").addEventListener("click", () => {
+      calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
+      render();
+    });
+    document.getElementById("cal-today").addEventListener("click", () => { calendarMonth = null; render(); });
+    content.querySelectorAll(".cal-chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        if (chip.dataset.kind === "entry") {
+          const entry = entries.find(e => e.id === chip.dataset.id);
+          if (entry) openDetail(entry);
+        } else {
+          const plan = pcoPlans.find(p => p.id === chip.dataset.id);
+          if (plan) openModal(null, plan);
+        }
       });
     });
     if (!pcoLoaded) loadPcoPlans();
@@ -520,6 +586,53 @@ function renderPco() {
   </table>`;
 }
 
+function renderCalendar() {
+  if (!calendarMonth) {
+    const t = new Date();
+    calendarMonth = new Date(t.getFullYear(), t.getMonth(), 1);
+  }
+  const year = calendarMonth.getFullYear();
+  const month = calendarMonth.getMonth();
+  const monthLabel = calendarMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const byDate = {};
+  getCalendarEvents().forEach(ev => { (byDate[ev.date] ||= []).push(ev); });
+
+  const header = `<div class="cal-header">
+    <button class="btn-secondary" id="cal-prev" title="Previous month">‹</button>
+    <h3 class="display" style="margin:0;min-width:200px;text-align:center;">${monthLabel}</h3>
+    <button class="btn-secondary" id="cal-next" title="Next month">›</button>
+    <button class="btn-secondary" id="cal-today" style="margin-left:auto;">Today</button>
+  </div>`;
+
+  const dowLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const dowRow = dowLabels.map(d => `<div class="cal-dow">${d}</div>`).join("");
+
+  let cells = "";
+  for (let i = 0; i < firstDow; i++) cells += `<div class="cal-cell cal-cell-empty"></div>`;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const dayEvents = byDate[dateStr] || [];
+    const chips = dayEvents.map(ev => {
+      const badgeCls = ev.serviceType ? badgeClass(ev.serviceType) : "badge-unmatched";
+      const label = ev.serviceType || ev.label;
+      const statusCls = ev.logged ? "cal-chip-logged" : "cal-chip-pending";
+      return `<button class="cal-chip ${badgeCls} ${statusCls}" data-kind="${ev.kind}" data-id="${escapeHtml(ev.id)}" title="${escapeHtml(ev.label)}">${escapeHtml(label)}</button>`;
+    }).join("");
+    cells += `<div class="cal-cell ${dateStr === todayStr ? "cal-cell-today" : ""}">
+      <div class="cal-daynum">${day}</div>
+      <div class="cal-chips">${chips}</div>
+    </div>`;
+  }
+
+  return `${header}
+    <div class="cal-grid cal-dow-row">${dowRow}</div>
+    <div class="cal-grid">${cells}</div>`;
+}
+
 function openDetail(entry) {
   if (!entry) return;
   document.getElementById("modal-slot").innerHTML = `
@@ -626,6 +739,7 @@ function closeModal() { document.getElementById("modal-slot").innerHTML = ""; }
 
 document.getElementById("open-form-btn").addEventListener("click", () => openModal());
 document.getElementById("tab-log").addEventListener("click", () => { view = "log"; render(); });
+document.getElementById("tab-calendar").addEventListener("click", () => { view = "calendar"; render(); });
 document.getElementById("tab-analytics").addEventListener("click", () => { view = "analytics"; render(); });
 document.getElementById("tab-pco").addEventListener("click", () => { view = "pco"; render(); });
 document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
