@@ -9,8 +9,16 @@ create table if not exists public.service_entries (
   engagement smallint not null check (engagement between 1 and 5),
   loudness_db integer not null,
   notes text default '',
+  pco_plan_id text unique,
   created_at timestamptz not null default now()
 );
+
+-- Links an entry back to the Planning Center Plan it was created from, so the
+-- "Planning Center" tab can tell which plans are already logged. Null for
+-- manually-logged entries. Safe to re-run on a database that already has the
+-- table (e.g. before the PCO integration was added).
+alter table public.service_entries
+  add column if not exists pco_plan_id text unique;
 
 -- Enable Row Level Security
 alter table public.service_entries enable row level security;

@@ -116,6 +116,12 @@
   .footer-links a{color:var(--brass);text-decoration:none;font-size:14px;font-weight:600;}
   .footer-links a:hover{text-decoration:underline;}
   .footer-meta{color:var(--muted);font-size:12px;}
+  .pco-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:20px;flex-wrap:wrap;}
+  .badge-unmatched{background:var(--zebra);color:var(--muted);border:1px dashed var(--line);}
+  .status-pill{border:none;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:700;letter-spacing:.02em;white-space:nowrap;}
+  .status-logged{background:var(--pew);color:var(--paper);}
+  .status-pending{background:var(--brass-soft);color:var(--brass);border:1px solid var(--brass);}
+  .pco-linked-note{background:var(--brass-soft);color:var(--brass);border-radius:4px;padding:10px 14px;font-size:13px;font-weight:600;margin-top:-8px;}
 </style>
 </head>
 <body>
@@ -136,6 +142,7 @@
     <nav>
       <button id="tab-log" class="active">Ledger</button>
       <button id="tab-analytics">Analytics</button>
+      <button id="tab-pco">Planning Center</button>
     </nav>
   </div>
 </header>
@@ -162,7 +169,7 @@
 /* ====================== CONFIGURE THIS ======================
    Paste your Supabase project URL and anon (public) key below.
    Both are safe to expose in frontend code — access is controlled
-   by the Row Level Security policies in schema.sql.
+   by the Row Level Security policies in db/schema.sql.
    ============================================================== */
 const SUPABASE_URL = "https://uvwgotklgfhvqbcpdqqb.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV2d2dvdGtsZ2ZodnFiY3BkcXFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0Nzc5NDQsImV4cCI6MjA5OTA1Mzk0NH0.gMBS_RU3yHkk2O7BjiUWwPOofLpiOtS0oOVylU9e2Dc";
@@ -171,15 +178,40 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const SERVICE_TYPES = ["9:30 AM", "11:00 AM", "Worship Night", "SkyYouth", "Special Event"];
 const LOGO_LIGHT = "assets/1500w-skyline-identity-logo-blue-green-black-png.png";
 const LOGO_DARK = "assets/skyline-dark-logo.png";
+
+/* Best-effort mapping from Planning Center Service Type folder names to the
+   SERVICE_TYPES above. Tune these once you see your real PCO folder names —
+   unmatched plans just fall back to the "Select a service…" placeholder. */
+const PCO_SERVICE_TYPE_ALIASES = {
+  "9:30 AM": ["9:30", "930"],
+  "11:00 AM": ["11:00", "1100", "11 am"],
+  "Worship Night": ["worship night"],
+  "SkyYouth": ["skyyouth", "sky youth", "youth"],
+  "Special Event": ["special event"],
+};
+
 let sb = null;
 let entries = [];
 let view = "log";
 let charts = [];
 let filterType = "All";
+let pcoPlans = [];
+let pcoError = null;
+let pcoLoaded = false;
 
 function badgeClass(serviceType) {
   const idx = SERVICE_TYPES.indexOf(serviceType);
   return `badge-${idx >= 0 ? idx % 5 : 0}`;
+}
+
+function guessServiceType(pcoName) {
+  const norm = s => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const n = norm(pcoName);
+  for (const s of SERVICE_TYPES) if (norm(s) === n) return s;
+  for (const [s, aliases] of Object.entries(PCO_SERVICE_TYPE_ALIASES)) {
+    if (aliases.some(a => n.includes(norm(a)))) return s;
+  }
+  return "";
 }
 
 function getStoredTheme() {
@@ -246,6 +278,7 @@ function render() {
   const content = document.getElementById("content");
   document.getElementById("tab-log").classList.toggle("active", view === "log");
   document.getElementById("tab-analytics").classList.toggle("active", view === "analytics");
+  document.getElementById("tab-pco").classList.toggle("active", view === "pco");
   document.getElementById("export-btn").disabled = entries.length === 0;
   destroyCharts();
 
@@ -257,6 +290,23 @@ function render() {
     return;
   } else {
     document.getElementById("config-slot").innerHTML = "";
+  }
+
+  if (view === "pco") {
+    content.innerHTML = renderPco();
+    const refreshBtn = document.getElementById("pco-refresh");
+    if (refreshBtn) refreshBtn.addEventListener("click", () => loadPcoPlans(true));
+    content.querySelectorAll(".pco-log-btn").forEach(btn => {
+      btn.addEventListener("click", () => openModal(null, pcoPlans.find(p => p.id === btn.dataset.id)));
+    });
+    content.querySelectorAll(".pco-view-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const entry = entries.find(e => e.pco_plan_id === btn.dataset.id);
+        if (entry) openDetail(entry);
+      });
+    });
+    if (!pcoLoaded) loadPcoPlans();
+    return;
   }
 
   if (entries.length === 0) {
@@ -404,6 +454,72 @@ function renderCharts() {
   charts = [c1, c2, c3];
 }
 
+async function loadPcoPlans(force) {
+  if (!force && pcoLoaded) return;
+  pcoError = null;
+  try {
+    const res = await fetch("/api/pco-plans");
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      pcoError = body.error || `Planning Center request failed (${res.status}).`;
+      pcoPlans = [];
+    } else {
+      pcoPlans = body.plans || [];
+    }
+  } catch (err) {
+    pcoError = "Couldn't reach Planning Center: " + err.message;
+    pcoPlans = [];
+  }
+  pcoLoaded = true;
+  render();
+}
+
+function renderPco() {
+  const header = `<div class="pco-header">
+    <div>
+      <h3 class="display" style="margin:0 0 4px;">Planning Center — Plans</h3>
+      <div style="color:var(--muted);font-size:13px;">Pulled live from your Services Service Types. Log Pulse details for any plan below.</div>
+    </div>
+    <button class="btn-secondary" id="pco-refresh">↻ Refresh</button>
+  </div>`;
+
+  if (!pcoLoaded) {
+    return `${header}<div class="empty"><div class="display">Loading Planning Center plans…</div></div>`;
+  }
+  if (pcoError) {
+    return `${header}<div class="error-banner">${escapeHtml(pcoError)}</div>`;
+  }
+  if (pcoPlans.length === 0) {
+    return `${header}<div class="empty">
+      <div class="display">No plans found.</div>
+      <div>Nothing scheduled in the last 14 days or next 45 days across your Service Types.</div>
+    </div>`;
+  }
+
+  const loggedIds = new Set(entries.filter(e => e.pco_plan_id).map(e => e.pco_plan_id));
+
+  const rows = pcoPlans.map(p => {
+    const matched = guessServiceType(p.service_type_name);
+    const badge = matched
+      ? `<span class="service-badge ${badgeClass(matched)}">${escapeHtml(matched)}</span>`
+      : `<span class="service-badge badge-unmatched">${escapeHtml(p.service_type_name)}</span>`;
+    const isLogged = loggedIds.has(p.id);
+    const action = isLogged
+      ? `<button class="status-pill status-logged pco-view-btn" data-id="${escapeHtml(p.id)}">Logged ✓</button>`
+      : `<button class="status-pill status-pending pco-log-btn" data-id="${escapeHtml(p.id)}">Needs details</button>`;
+    return `<tr>
+      <td>${fmtDate(p.sort_date.slice(0,10))}</td>
+      <td>${badge}<div class="notes">${escapeHtml(p.title)}${p.series_title ? " · " + escapeHtml(p.series_title) : ""}</div></td>
+      <td class="actions-cell">${action}</td>
+    </tr>`;
+  }).join("");
+
+  return `${header}<table>
+    <thead><tr><th>Date</th><th>Plan</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
 function openDetail(entry) {
   if (!entry) return;
   document.getElementById("modal-slot").innerHTML = `
@@ -441,12 +557,12 @@ function openDetail(entry) {
   });
 }
 
-function openModal(entry) {
+function openModal(entry, pcoPlan) {
   const editing = !!entry;
   const today = new Date().toISOString().slice(0,10);
   const v = {
-    date: entry ? entry.service_date : today,
-    service: entry ? entry.service_type : "",
+    date: entry ? entry.service_date : (pcoPlan ? pcoPlan.sort_date.slice(0,10) : today),
+    service: entry ? entry.service_type : (pcoPlan ? guessServiceType(pcoPlan.service_type_name) : ""),
     attendance: entry ? entry.attendance : "",
     unity: entry ? entry.unity : 3,
     engagement: entry ? entry.engagement : 3,
@@ -458,6 +574,7 @@ function openModal(entry) {
       <div class="modal">
         <div class="modal-head"><h2 class="display">${editing ? "Edit Service" : "Log a Service"}</h2><button class="close-x" id="modal-close">✕</button></div>
         <div class="modal-body">
+          ${pcoPlan ? `<div class="pco-linked-note">From Planning Center: <strong>${escapeHtml(pcoPlan.title)}</strong></div>` : ""}
           <div class="row2">
             <label class="field" style="flex:1"><span>Date</span><input type="date" id="f-date" value="${v.date}"></label>
             <label class="field" style="flex:1"><span>Service *</span>
@@ -499,6 +616,7 @@ function openModal(entry) {
       engagement: Number(document.getElementById("f-engagement").value),
       loudness_db: Number(loudness),
       notes: document.getElementById("f-notes").value.trim(),
+      pco_plan_id: entry ? (entry.pco_plan_id ?? null) : (pcoPlan ? pcoPlan.id : null),
     };
     const ok = editing ? await updateEntry(entry.id, payload) : await addEntry(payload);
     if (ok) closeModal();
@@ -509,6 +627,7 @@ function closeModal() { document.getElementById("modal-slot").innerHTML = ""; }
 document.getElementById("open-form-btn").addEventListener("click", () => openModal());
 document.getElementById("tab-log").addEventListener("click", () => { view = "log"; render(); });
 document.getElementById("tab-analytics").addEventListener("click", () => { view = "analytics"; render(); });
+document.getElementById("tab-pco").addEventListener("click", () => { view = "pco"; render(); });
 document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
 document.getElementById("export-btn").addEventListener("click", exportCSV);
 document.getElementById("footer-year").textContent = new Date().getFullYear();
