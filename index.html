@@ -87,6 +87,7 @@
   .field{display:flex;flex-direction:column;gap:6px;}
   .field span{font-size:13px;font-weight:600;color:var(--field-label);}
   .field-section-label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--brass);font-weight:700;border-top:1px solid var(--line);padding-top:14px;}
+  .service-locked{display:flex;align-items:center;min-height:41px;}
   input,select,textarea{border:1px solid var(--line);border-radius:4px;padding:10px 12px;font-size:15px;background:var(--surface);color:var(--ink);outline:none;font-family:inherit;width:100%;}
   input[type=range]{accent-color:var(--brass);padding:0;}
   .row2{display:flex;gap:12px;}
@@ -219,7 +220,7 @@ let pcoPlans = [];
 let pcoError = null;
 let pcoLoaded = false;
 let pcoLoading = false;
-let pcoFilterType = "All";
+let pcoFilterTypes = new Set();
 let calendarMonth = null;
 
 function getCalendarEvents() {
@@ -373,7 +374,13 @@ function render() {
       });
     });
     content.querySelectorAll(".filter-chip").forEach(chip => {
-      chip.addEventListener("click", () => { pcoFilterType = chip.dataset.filter; render(); });
+      chip.addEventListener("click", () => {
+        const val = chip.dataset.filter;
+        if (val === "All") pcoFilterTypes.clear();
+        else if (pcoFilterTypes.has(val)) pcoFilterTypes.delete(val);
+        else pcoFilterTypes.add(val);
+        render();
+      });
     });
     if (!pcoLoaded) loadPcoPlans();
     return;
@@ -607,19 +614,19 @@ function renderPco() {
 
   const typesPresent = [...new Set(pcoPlans.map(pcoRowLabel))].sort();
   const filterRow = `<div class="filter-row">
-    <button class="filter-chip ${pcoFilterType === "All" ? "all-active" : ""}" data-filter="All">All (${pcoPlans.length})</button>
+    <button class="filter-chip ${pcoFilterTypes.size === 0 ? "all-active" : ""}" data-filter="All">All (${pcoPlans.length})</button>
     ${typesPresent.map(label => {
       const matched = SERVICE_TYPES.includes(label) ? label : "";
       const cls = matched ? badgeClass(matched) : "badge-unmatched";
       const count = pcoPlans.filter(p => pcoRowLabel(p) === label).length;
-      return `<button class="filter-chip ${cls} ${pcoFilterType === label ? "active" : ""}" data-filter="${escapeHtml(label)}">${escapeHtml(label)} (${count})</button>`;
+      return `<button class="filter-chip ${cls} ${pcoFilterTypes.has(label) ? "active" : ""}" data-filter="${escapeHtml(label)}">${escapeHtml(label)} (${count})</button>`;
     }).join("")}
   </div>`;
 
-  const filteredPlans = pcoFilterType === "All" ? pcoPlans : pcoPlans.filter(p => pcoRowLabel(p) === pcoFilterType);
+  const filteredPlans = pcoFilterTypes.size === 0 ? pcoPlans : pcoPlans.filter(p => pcoFilterTypes.has(pcoRowLabel(p)));
 
   if (filteredPlans.length === 0) {
-    return `${header}${filterRow}<div class="filter-empty">No plans for ${escapeHtml(pcoFilterType)}.</div>`;
+    return `${header}${filterRow}<div class="filter-empty">No plans for ${[...pcoFilterTypes].map(escapeHtml).join(", ")}.</div>`;
   }
 
   const entriesByPlan = {};
@@ -751,9 +758,11 @@ function openDetail(entry) {
 function openModal(entry, pcoPlan) {
   const editing = !!entry;
   const today = new Date().toISOString().slice(0,10);
+  const pcoMatchedService = (!editing && pcoPlan) ? guessServiceType(pcoPlan.plan_time_name || pcoPlan.service_type_name) : "";
+  const serviceLocked = !!pcoMatchedService;
   const v = {
     date: entry ? entry.service_date : (pcoPlan ? pcoPlan.sort_date.slice(0,10) : today),
-    service: entry ? entry.service_type : (pcoPlan ? guessServiceType(pcoPlan.plan_time_name || pcoPlan.service_type_name) : ""),
+    service: entry ? entry.service_type : pcoMatchedService,
     attendance: entry ? entry.attendance : "",
     unity: entry ? entry.unity : 3,
     engagement: entry ? entry.engagement : 3,
@@ -775,12 +784,20 @@ function openModal(entry, pcoPlan) {
           ${pcoPlan ? `<div class="pco-linked-note">From Planning Center: <strong>${escapeHtml(pcoPlan.title)}${pcoPlan.plan_time_name ? " · " + escapeHtml(pcoPlan.plan_time_name) : ""}</strong></div>` : ""}
           <div class="row2">
             <label class="field" style="flex:1"><span>Date</span><input type="date" id="f-date" value="${v.date}"></label>
+            ${serviceLocked ? `
+            <div class="field" style="flex:1">
+              <span>Service</span>
+              <div class="service-locked"><span class="service-badge ${badgeClass(v.service)}">${escapeHtml(v.service)}</span></div>
+              <input type="hidden" id="f-service" value="${escapeHtml(v.service)}">
+            </div>
+            ` : `
             <label class="field" style="flex:1"><span>Service *</span>
               <select id="f-service" required>
                 <option value="" ${v.service?"":"selected"} disabled>Select a service…</option>
                 ${SERVICE_TYPES.map(s=>`<option value="${s}" ${s===v.service?"selected":""}>${s}</option>`).join("")}
               </select>
             </label>
+            `}
           </div>
           <label class="field"><span>Attendance (headcount)</span><input type="number" min="0" id="f-attendance" placeholder="e.g. 214" value="${v.attendance}"></label>
           <label class="field"><span id="unity-label">Oneness in One Voice (worship unity) — ${v.unity}/5</span><input type="range" min="1" max="5" value="${v.unity}" id="f-unity"></label>
