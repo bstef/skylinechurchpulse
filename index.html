@@ -132,6 +132,9 @@
   .status-pending{background:var(--brass-soft);color:var(--brass);border:1px solid var(--brass);}
   .status-pill:disabled{opacity:.5;cursor:not-allowed;}
   .pco-status-group{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;}
+  .pco-plan-cell{display:flex;align-items:center;gap:10px;}
+  .pco-artwork{width:40px;height:40px;border-radius:4px;object-fit:cover;flex-shrink:0;border:1px solid var(--line);}
+  .pco-artwork-lg{width:56px;height:56px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid var(--line);}
   .pco-linked-note{background:var(--brass-soft);color:var(--brass);border-radius:4px;padding:10px 14px;font-size:13px;font-weight:600;margin-top:-8px;}
   .cal-header{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
   .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
@@ -710,7 +713,15 @@ function renderPco() {
       : `<button class="status-pill status-pending pco-log-btn" data-id="${escapeHtml(p.id)}">${linked.length ? "+ Log another" : "Needs details"}</button>`;
     return `<tr>
       <td>${fmtDate(p.sort_date.slice(0,10))}${p.plan_time_name ? `<div class="notes">${escapeHtml(p.plan_time_name)}</div>` : ""}</td>
-      <td>${badge}<div class="notes">${escapeHtml(p.title)}${p.series_title ? " · " + escapeHtml(p.series_title) : ""}</div></td>
+      <td>
+        <div class="pco-plan-cell">
+          ${p.artwork_url ? `<img class="pco-artwork" src="${escapeHtml(p.artwork_url)}" alt="">` : ""}
+          <div>
+            ${badge}
+            <div class="notes">${escapeHtml(p.title)}${p.series_title ? " · " + escapeHtml(p.series_title) : ""}</div>
+          </div>
+        </div>
+      </td>
       <td class="actions-cell"><div class="pco-status-group">${loggedPills}${logBtn}</div></td>
     </tr>`;
   }).join("");
@@ -843,7 +854,10 @@ function openModal(entry, pcoPlan) {
       <div class="modal">
         <div class="modal-head"><h2 class="display">${editing ? "Edit Service" : "Log a Service"}</h2><button class="close-x" id="modal-close">✕</button></div>
         <div class="modal-body">
-          ${pcoPlan ? `<div class="pco-linked-note">From Planning Center: <strong>${escapeHtml(pcoPlan.title)}${pcoPlan.plan_time_name ? " · " + escapeHtml(pcoPlan.plan_time_name) : ""}</strong></div>` : ""}
+          ${pcoPlan ? `<div class="pco-linked-note" style="display:flex;align-items:center;gap:12px;">
+            ${pcoPlan.artwork_url ? `<img class="pco-artwork-lg" src="${escapeHtml(pcoPlan.artwork_url)}" alt="">` : ""}
+            <span>From Planning Center: <strong>${escapeHtml(pcoPlan.title)}${pcoPlan.plan_time_name ? " · " + escapeHtml(pcoPlan.plan_time_name) : ""}</strong></span>
+          </div>` : ""}
           <div class="row2">
             <label class="field" style="flex:1"><span>Date</span><input type="date" id="f-date" value="${v.date}" max="${today}"></label>
             ${serviceLocked ? `

@@ -96,6 +96,22 @@ export async function onRequestGet(context) {
         return t >= windowStart && t <= windowEnd;
       });
 
+    // Pull the sermon/series artwork for each plan, if any is attached.
+    await Promise.all(rawPlans.map(async (plan) => {
+      try {
+        const seriesRes = await fetch(`${PCO_BASE}/service_types/${st.id}/plans/${plan.plan_id}/series`, { headers });
+        if (!seriesRes.ok) return;
+        const seriesBody = await seriesRes.json();
+        const seriesData = Array.isArray(seriesBody.data) ? seriesBody.data[0] : seriesBody.data;
+        const attrs = seriesData && seriesData.attributes;
+        if (attrs && attrs.has_artwork) {
+          plan.artwork_url = attrs.artwork_for_dashboard || attrs.artwork_for_plan || attrs.artwork_original || null;
+        }
+      } catch (err) {
+        // no series/artwork for this plan — leave artwork_url unset
+      }
+    }));
+
     // A single Plan can represent more than one physical gathering (e.g. one
     // "Celebration Service" Plan covers both a 9:30am and 11:00am service,
     // each as its own PlanTime). Expand each Plan into one row per actual
