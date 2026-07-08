@@ -6,6 +6,18 @@
 const PCO_BASE = "https://api.planningcenteronline.com/services/v2";
 const WINDOW_DAYS_PAST = 14;
 const WINDOW_DAYS_FUTURE = 45;
+const CHURCH_TIMEZONE = "America/New_York";
+
+// PlanTime's own `name` attribute is often left blank in practice, so derive
+// a readable local time (e.g. "9:30 AM") from `starts_at` as a fallback —
+// this also matches Pulse's SERVICE_TYPES labels directly.
+function localTimeLabel(iso) {
+  try {
+    return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: CHURCH_TIMEZONE }).format(new Date(iso));
+  } catch (err) {
+    return "";
+  }
+}
 
 // Service Type folders that aren't worship/gathering events Pulse cares about
 // (children's check-in, assimilation, etc.) — tune this list as your PCO org changes.
@@ -95,7 +107,7 @@ export async function onRequestGet(context) {
         ...plan,
         id: `${plan.plan_id}:${t.id}`,
         sort_date: t.attributes.starts_at,
-        plan_time_name: t.attributes.name || "",
+        plan_time_name: t.attributes.name || localTimeLabel(t.attributes.starts_at),
       }));
     }));
 
