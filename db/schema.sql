@@ -11,8 +11,10 @@ create table if not exists public.service_entries (
   sound_clarity boolean not null default false,
   spiritual_response smallint not null default 5 check (spiritual_response between 0 and 10),
   transition_clarity smallint not null default 3 check (transition_clarity between 1 and 5),
-  propresenter_ready boolean not null default false,
-  video_download_trained boolean not null default false,
+  lighting_fit boolean not null default true,
+  talking_fit boolean not null default true,
+  announcements_fit boolean not null default true,
+  sermon_fit boolean not null default true,
   notes text default '',
   pco_plan_id text,
   created_at timestamptz not null default now(),
@@ -39,18 +41,33 @@ alter table public.service_entries
 alter table public.service_entries
   add constraint service_entries_pco_plan_id_service_type_key unique (pco_plan_id, service_type);
 
--- Additional room/team-experience measurements. Safe to re-run on a database
--- that already has the table; existing rows backfill to each column's default.
+-- Additional room-experience and service-flow measurements. Safe to re-run on
+-- a database that already has the table; existing rows backfill to each
+-- column's default.
 alter table public.service_entries
   add column if not exists sound_clarity boolean not null default false;
 alter table public.service_entries
   add column if not exists spiritual_response smallint not null default 5 check (spiritual_response between 0 and 10);
 alter table public.service_entries
   add column if not exists transition_clarity smallint not null default 3 check (transition_clarity between 1 and 5);
+
+-- ProPresenter/video-training were an earlier draft of this integration but
+-- turned out to be a one-time summer goal, not a weekly measurement — drop
+-- them if a prior migration already added them. Safe to re-run.
 alter table public.service_entries
-  add column if not exists propresenter_ready boolean not null default false;
+  drop column if exists propresenter_ready;
 alter table public.service_entries
-  add column if not exists video_download_trained boolean not null default false;
+  drop column if exists video_download_trained;
+
+-- Did each major segment of the service land as planned.
+alter table public.service_entries
+  add column if not exists lighting_fit boolean not null default true;
+alter table public.service_entries
+  add column if not exists talking_fit boolean not null default true;
+alter table public.service_entries
+  add column if not exists announcements_fit boolean not null default true;
+alter table public.service_entries
+  add column if not exists sermon_fit boolean not null default true;
 
 -- Enable Row Level Security
 alter table public.service_entries enable row level security;

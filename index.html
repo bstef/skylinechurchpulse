@@ -261,6 +261,17 @@ function guessServiceType(pcoName) {
   return "";
 }
 
+function yesNoSelect(id, value) {
+  return `<select id="${id}">
+    <option value="yes" ${value ? "selected" : ""}>Yes</option>
+    <option value="no" ${!value ? "selected" : ""}>No</option>
+  </select>`;
+}
+
+function readinessRow(value, label) {
+  return `<div class="readiness-row"><span class="${value ? "check-yes" : "check-no"}">${value ? "✓" : "✕"}</span> ${escapeHtml(label)}</div>`;
+}
+
 function getStoredTheme() {
   return localStorage.getItem("skyline-theme") ||
     (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
@@ -470,12 +481,12 @@ function exportCSV() {
   const header = [
     "Date", "Service", "Attendance", "Unity (1-5)", "Engagement (1-5)", "Loudness (dB)",
     "Sound Clarity (Y/N)", "Spiritual Response (0-10)", "Transition Clarity (1-5)",
-    "ProPresenter Ready (Y/N)", "Video Download Trained (Y/N)", "Notes",
+    "Lighting Fit (Y/N)", "Talking Fit (Y/N)", "Announcements Fit (Y/N)", "Sermon Fit (Y/N)", "Notes",
   ];
   const rows = entries.map(e => [
     e.service_date, e.service_type, e.attendance, e.unity, e.engagement, e.loudness_db,
     e.sound_clarity ? "Y" : "N", e.spiritual_response, e.transition_clarity,
-    e.propresenter_ready ? "Y" : "N", e.video_download_trained ? "Y" : "N", e.notes || "",
+    e.lighting_fit ? "Y" : "N", e.talking_fit ? "Y" : "N", e.announcements_fit ? "Y" : "N", e.sermon_fit ? "Y" : "N", e.notes || "",
   ]);
   const csv = [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\r\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -709,9 +720,11 @@ function openDetail(entry) {
             <div class="detail-item"><span class="detail-label">Transition Clarity</span><span class="detail-value">${entry.transition_clarity ?? "—"}<span class="unit">/5</span></span></div>
           </div>
           <div class="detail-readiness">
-            <span class="detail-label">Team Readiness</span>
-            <div class="readiness-row"><span class="${entry.propresenter_ready ? "check-yes" : "check-no"}">${entry.propresenter_ready ? "✓" : "✕"}</span> ProPresenter ready by Fri 3pm</div>
-            <div class="readiness-row"><span class="${entry.video_download_trained ? "check-yes" : "check-no"}">${entry.video_download_trained ? "✓" : "✕"}</span> 3+ trained to download video</div>
+            <span class="detail-label">Service Flow</span>
+            ${readinessRow(entry.lighting_fit, "Lighting fit the song")}
+            ${readinessRow(entry.talking_fit, "Talking/host segments flowed well")}
+            ${readinessRow(entry.announcements_fit, "Announcements landed well")}
+            ${readinessRow(entry.sermon_fit, "Sermon/message connected")}
           </div>
           ${entry.notes ? `<div class="detail-notes-block"><span class="detail-label">Notes</span><p>${escapeHtml(entry.notes)}</p></div>` : ""}
           <div class="detail-actions">
@@ -744,8 +757,10 @@ function openModal(entry, pcoPlan) {
     soundClarity: entry ? entry.sound_clarity : true,
     spiritualResponse: entry ? entry.spiritual_response : 5,
     transitionClarity: entry ? entry.transition_clarity : 3,
-    propresenterReady: entry ? entry.propresenter_ready : true,
-    videoDownloadTrained: entry ? entry.video_download_trained : true,
+    lightingFit: entry ? entry.lighting_fit : true,
+    talkingFit: entry ? entry.talking_fit : true,
+    announcementsFit: entry ? entry.announcements_fit : true,
+    sermonFit: entry ? entry.sermon_fit : true,
     notes: entry ? (entry.notes || "") : "",
   };
   document.getElementById("modal-slot").innerHTML = `
@@ -769,29 +784,18 @@ function openModal(entry, pcoPlan) {
           <label class="field"><span>Loudness (dB)</span><input type="number" min="0" id="f-loudness" placeholder="e.g. 92" value="${v.loudness}"></label>
 
           <div class="field-section-label">Room Experience</div>
-          <label class="field"><span>Sound blends well in the back (can't tell where it's coming from)</span>
-            <select id="f-sound">
-              <option value="yes" ${v.soundClarity ? "selected" : ""}>Yes</option>
-              <option value="no" ${!v.soundClarity ? "selected" : ""}>No</option>
-            </select>
-          </label>
+          <label class="field"><span>Sound blends well in the back (can't tell where it's coming from)</span>${yesNoSelect("f-sound", v.soundClarity)}</label>
           <label class="field"><span id="spiritual-label">Spiritual response, standing 2/3 back — ${v.spiritualResponse}/10</span><input type="range" min="0" max="10" value="${v.spiritualResponse}" id="f-spiritual"></label>
           <label class="field"><span id="transition-label">Transitions gave clear inspiration to respond — ${v.transitionClarity}/5</span><input type="range" min="1" max="5" value="${v.transitionClarity}" id="f-transition"></label>
 
-          <div class="field-section-label">Team Readiness</div>
+          <div class="field-section-label">Service Flow</div>
           <div class="row2">
-            <label class="field" style="flex:1"><span>ProPresenter ready by Fri 3pm</span>
-              <select id="f-propresenter">
-                <option value="yes" ${v.propresenterReady ? "selected" : ""}>Yes</option>
-                <option value="no" ${!v.propresenterReady ? "selected" : ""}>No</option>
-              </select>
-            </label>
-            <label class="field" style="flex:1"><span>3+ trained to download video</span>
-              <select id="f-video-trained">
-                <option value="yes" ${v.videoDownloadTrained ? "selected" : ""}>Yes</option>
-                <option value="no" ${!v.videoDownloadTrained ? "selected" : ""}>No</option>
-              </select>
-            </label>
+            <label class="field" style="flex:1"><span>Lighting fit the song</span>${yesNoSelect("f-lighting", v.lightingFit)}</label>
+            <label class="field" style="flex:1"><span>Talking/host segments flowed well</span>${yesNoSelect("f-talking", v.talkingFit)}</label>
+          </div>
+          <div class="row2">
+            <label class="field" style="flex:1"><span>Announcements landed well</span>${yesNoSelect("f-announcements", v.announcementsFit)}</label>
+            <label class="field" style="flex:1"><span>Sermon/message connected</span>${yesNoSelect("f-sermon", v.sermonFit)}</label>
           </div>
 
           <label class="field"><span>Notes (optional)</span><textarea rows="2" id="f-notes" placeholder="Anything worth remembering about this service…">${escapeHtml(v.notes)}</textarea></label>
@@ -830,8 +834,10 @@ function openModal(entry, pcoPlan) {
       sound_clarity: document.getElementById("f-sound").value === "yes",
       spiritual_response: Number(document.getElementById("f-spiritual").value),
       transition_clarity: Number(document.getElementById("f-transition").value),
-      propresenter_ready: document.getElementById("f-propresenter").value === "yes",
-      video_download_trained: document.getElementById("f-video-trained").value === "yes",
+      lighting_fit: document.getElementById("f-lighting").value === "yes",
+      talking_fit: document.getElementById("f-talking").value === "yes",
+      announcements_fit: document.getElementById("f-announcements").value === "yes",
+      sermon_fit: document.getElementById("f-sermon").value === "yes",
       notes: document.getElementById("f-notes").value.trim(),
       pco_plan_id: entry ? (entry.pco_plan_id ?? null) : (pcoPlan ? pcoPlan.id : null),
     };
