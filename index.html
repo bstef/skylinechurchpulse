@@ -41,15 +41,9 @@
   body{margin:0;background:var(--paper);color:var(--ink);font-family:'Source Sans 3',sans-serif;transition:background .2s,color .2s;}
   .display{font-family:'Fraunces',Georgia,serif;}
   header{border-bottom:1px solid var(--line);background:linear-gradient(120deg, var(--hero-grad-1), var(--hero-grad-2));}
-  .hero-banner{width:100%;height:52px;display:block;margin-top:10px;}
-  .hero-skyline{fill:var(--ink);opacity:.10;}
-  .hero-pulse-line{fill:none;stroke:var(--brass);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;}
-  .hero-cross line{stroke:var(--rust);stroke-width:2.5;stroke-linecap:round;}
   .wrap{max-width:1080px;margin:0 auto;padding:0 24px;}
-  .headtop{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;padding:28px 0 20px;}
-  .logo{height:60px;display:block;margin-bottom:14px;}
-  h1{font-size:40px;font-weight:700;margin:0;line-height:1;}
-  .hero-tagline{font-size:14px;color:var(--muted);margin-top:8px;}
+  .headtop{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;padding:20px 0;}
+  .hero-img{height:110px;width:auto;max-width:100%;display:block;border-radius:8px;}
   button{cursor:pointer;font-family:inherit;}
   .btn-primary{display:flex;align-items:center;gap:8px;background:var(--pew);color:var(--paper);border:none;border-radius:3px;padding:12px 20px;font-size:15px;font-weight:600;box-shadow:0 2px 0 rgba(0,0,0,.15);}
   nav{display:flex;gap:4px;margin-top:24px;overflow-x:auto;}
@@ -58,10 +52,8 @@
   main{max-width:1080px;margin:0 auto;padding:32px 24px 80px;}
   .table-scroll{overflow-x:auto;}
   @media (max-width: 640px){
-    .logo{height:38px;margin-bottom:10px;}
-    h1{font-size:26px;}
-    .hero-tagline{font-size:12px;margin-top:6px;}
-    .headtop{padding:20px 0 14px;}
+    .hero-img{height:64px;}
+    .headtop{padding:14px 0;}
     .btn-primary{padding:10px 14px;font-size:14px;}
     .btn-secondary{padding:10px 14px;font-size:14px;}
     main{padding:20px 16px 60px;}
@@ -72,7 +64,6 @@
     .cal-grid{gap:3px;}
     .cal-header-title{min-width:0;font-size:16px;flex:1 1 auto;}
     .cal-header-title-day{min-width:0;}
-    .hero-banner{height:32px;margin-top:6px;}
   }
   .empty{text-align:center;padding:80px 20px;color:var(--muted);}
   .empty .display{font-size:22px;margin-bottom:8px;color:var(--ink);}
@@ -204,11 +195,7 @@
 <header>
   <div class="wrap">
     <div class="headtop">
-      <div>
-        <img class="logo" id="logo-img" src="assets/1500w-skyline-identity-logo-blue-green-black-png.png" alt="Skyline Church">
-        <h1 class="display">Skyline Pulse</h1>
-        <div class="hero-tagline">The pulse of every gathering, service by service</div>
-      </div>
+      <img class="hero-img" id="hero-img" src="assets/skylinepulseherolight.png" alt="Skyline Church Pulse — One Heart. One Voice.">
       <div style="display:flex;align-items:center;gap:10px;">
         <button class="theme-toggle" id="theme-toggle" title="Cycle theme (Light / Dark / Ocean)"></button>
         <button class="btn-secondary" id="export-btn" title="Export ledger as CSV">⬇ Export</button>
@@ -221,14 +208,6 @@
       <button id="tab-log">Ledger</button>
       <button id="tab-analytics">Analytics</button>
     </nav>
-    <svg class="hero-banner" viewBox="0 0 1000 60" preserveAspectRatio="none" aria-hidden="true">
-      <path class="hero-skyline" d="M0,60 L0,48 L18,48 L18,40 L34,40 L34,52 L54,52 L54,26 L70,26 L70,44 L92,44 L92,16 L112,16 L112,44 L132,44 L132,35 L152,35 L152,50 L178,50 L178,20 L198,20 L198,50 L1000,50 L1000,60 Z"></path>
-      <path class="hero-pulse-line" d="M0,32 H360 L374,32 L386,12 L398,48 L410,20 L422,32 H478 L494,32 L498,8 L502,8 L506,32 H1000"></path>
-      <g class="hero-cross">
-        <line x1="500" y1="10" x2="500" y2="30"></line>
-        <line x1="491" y1="17" x2="509" y2="17"></line>
-      </g>
-    </svg>
   </div>
 </header>
 
@@ -263,8 +242,8 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 /* ============================================================== */
 
 const SERVICE_TYPES = ["9:30 AM", "11:00 AM", "Worship Night", "SkyYouth", "Special Event"];
-const LOGO_LIGHT = "assets/1500w-skyline-identity-logo-blue-green-black-png.png";
-const LOGO_DARK = "assets/skyline-dark-logo.png";
+const HERO_LIGHT = "assets/skylinepulseherolight.png";
+const HERO_DARK = "assets/skylinepulseherodark.png";
 
 /* Best-effort mapping from Planning Center Service Type folder names to the
    SERVICE_TYPES above. Tune these once you see your real PCO folder names —
@@ -360,7 +339,7 @@ function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   localStorage.setItem("skyline-theme", theme);
   document.getElementById("theme-toggle").textContent = THEME_ICONS[theme];
-  document.getElementById("logo-img").src = theme === "light" ? LOGO_LIGHT : LOGO_DARK;
+  document.getElementById("hero-img").src = theme === "light" ? HERO_LIGHT : HERO_DARK;
   if (view === "analytics" && charts.length) { destroyCharts(); renderCharts(); }
 }
 function toggleTheme() {
