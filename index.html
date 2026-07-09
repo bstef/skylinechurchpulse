@@ -17,7 +17,6 @@
     --c2:#A6503C; --c2-soft:rgba(166,80,60,.14);
     --c3:#2E9C8F; --c3-soft:rgba(46,156,143,.14);
     --c4:#7A5C9E; --c4-soft:rgba(122,92,158,.14);
-    --hero-grad-1:rgba(184,146,90,.22); --hero-grad-2:rgba(40,118,255,.14);
   }
   [data-theme="dark"]{
     --ink:#EDE8DA; --paper:#1C1E21; --surface:#26282B; --brass:#D3AD78; --pew:#5B93FF; --rust:#DD8266; --line:#35373A; --muted:#96989C; --field-label:#C7C5C0; --banner-bg:#3A241E; --brass-soft:rgba(211,173,120,.16); --zebra:rgba(255,255,255,.02);
@@ -26,7 +25,6 @@
     --c2:#DD8266; --c2-soft:rgba(221,130,102,.18);
     --c3:#4FB5A8; --c3-soft:rgba(79,181,168,.18);
     --c4:#A98BC9; --c4-soft:rgba(169,139,201,.18);
-    --hero-grad-1:rgba(211,173,120,.28); --hero-grad-2:rgba(91,147,255,.20);
   }
   [data-theme="ocean"]{
     --ink:#DCEEF0; --paper:#0E2229; --surface:#142E37; --brass:#E3BC7C; --pew:#52BF93; --rust:#E28F6E; --line:#24444E; --muted:#86AEB6; --field-label:#BFDBDD; --banner-bg:#3A2620; --brass-soft:rgba(227,188,124,.18); --zebra:rgba(255,255,255,.025);
@@ -35,15 +33,15 @@
     --c2:#E28F6E; --c2-soft:rgba(226,143,110,.18);
     --c3:#6EC5E8; --c3-soft:rgba(110,197,232,.18);
     --c4:#A79AE0; --c4-soft:rgba(167,154,224,.18);
-    --hero-grad-1:rgba(227,188,124,.22); --hero-grad-2:rgba(110,197,232,.22);
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:'Source Sans 3',sans-serif;transition:background .2s,color .2s;}
   .display{font-family:'Fraunces',Georgia,serif;}
-  header{border-bottom:1px solid var(--line);background:linear-gradient(120deg, var(--hero-grad-1), var(--hero-grad-2));}
+  header{border-bottom:1px solid var(--line);}
   .wrap{max-width:1080px;margin:0 auto;padding:0 24px;}
-  .headtop{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;padding:20px 0;}
-  .hero-img{height:110px;width:auto;max-width:100%;display:block;border-radius:8px;}
+  .headtop{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;padding:28px 0 20px;}
+  .logo{height:60px;display:block;margin-bottom:14px;}
+  h1{font-size:40px;font-weight:700;margin:0;line-height:1;}
   button{cursor:pointer;font-family:inherit;}
   .btn-primary{display:flex;align-items:center;gap:8px;background:var(--pew);color:var(--paper);border:none;border-radius:3px;padding:12px 20px;font-size:15px;font-weight:600;box-shadow:0 2px 0 rgba(0,0,0,.15);}
   nav{display:flex;gap:4px;margin-top:24px;overflow-x:auto;}
@@ -52,8 +50,9 @@
   main{max-width:1080px;margin:0 auto;padding:32px 24px 80px;}
   .table-scroll{overflow-x:auto;}
   @media (max-width: 640px){
-    .hero-img{height:64px;}
-    .headtop{padding:14px 0;}
+    .logo{height:38px;margin-bottom:10px;}
+    h1{font-size:26px;}
+    .headtop{padding:20px 0 14px;}
     .btn-primary{padding:10px 14px;font-size:14px;}
     .btn-secondary{padding:10px 14px;font-size:14px;}
     main{padding:20px 16px 60px;}
@@ -64,6 +63,8 @@
     .cal-grid{gap:3px;}
     .cal-header-title{min-width:0;font-size:16px;flex:1 1 auto;}
     .cal-header-title-day{min-width:0;}
+    .row2{flex-direction:column;gap:18px;}
+    .modal-body{padding:18px;}
   }
   .empty{text-align:center;padding:80px 20px;color:var(--muted);}
   .empty .display{font-size:22px;margin-bottom:8px;color:var(--ink);}
@@ -109,7 +110,7 @@
   .modal-head{display:flex;justify-content:space-between;align-items:center;padding:20px 24px;border-bottom:1px solid var(--line);}
   .modal-head h2{margin:0;font-size:22px;}
   .modal-body{padding:24px;display:flex;flex-direction:column;gap:18px;}
-  .field{display:flex;flex-direction:column;gap:6px;}
+  .field{display:flex;flex-direction:column;gap:6px;min-width:0;}
   .field span{font-size:13px;font-weight:600;color:var(--field-label);}
   .field-section-label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--brass);font-weight:700;border-top:1px solid var(--line);padding-top:14px;}
   .service-locked{display:flex;align-items:center;min-height:41px;}
@@ -195,7 +196,10 @@
 <header>
   <div class="wrap">
     <div class="headtop">
-      <img class="hero-img" id="hero-img" src="assets/skylinepulseherolight.png" alt="Skyline Church Pulse — One Heart. One Voice.">
+      <div>
+        <img class="logo" id="logo-img" src="assets/1500w-skyline-identity-logo-blue-green-black-png.png" alt="Skyline Church">
+        <h1 class="display">Skyline Pulse</h1>
+      </div>
       <div style="display:flex;align-items:center;gap:10px;">
         <button class="theme-toggle" id="theme-toggle" title="Cycle theme (Light / Dark / Ocean)"></button>
         <button class="btn-secondary" id="export-btn" title="Export ledger as CSV">⬇ Export</button>
@@ -242,8 +246,8 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 /* ============================================================== */
 
 const SERVICE_TYPES = ["9:30 AM", "11:00 AM", "Worship Night", "SkyYouth", "Special Event"];
-const HERO_LIGHT = "assets/skylinepulseherolight.png";
-const HERO_DARK = "assets/skylinepulseherodark.png";
+const LOGO_LIGHT = "assets/1500w-skyline-identity-logo-blue-green-black-png.png";
+const LOGO_DARK = "assets/skyline-dark-logo.png";
 
 /* Best-effort mapping from Planning Center Service Type folder names to the
    SERVICE_TYPES above. Tune these once you see your real PCO folder names —
@@ -339,7 +343,7 @@ function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   localStorage.setItem("skyline-theme", theme);
   document.getElementById("theme-toggle").textContent = THEME_ICONS[theme];
-  document.getElementById("hero-img").src = theme === "light" ? HERO_LIGHT : HERO_DARK;
+  document.getElementById("logo-img").src = theme === "light" ? LOGO_LIGHT : LOGO_DARK;
   if (view === "analytics" && charts.length) { destroyCharts(); renderCharts(); }
 }
 function toggleTheme() {
