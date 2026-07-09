@@ -131,6 +131,10 @@
   .close-x{background:none;border:none;color:var(--ink);font-size:20px;}
   .error-banner{background:var(--banner-bg);border:1px solid var(--rust);color:var(--rust);padding:10px 14px;border-radius:4px;margin-bottom:20px;font-size:14px;}
   .chart-box{position:relative;height:260px;}
+  .logger-list{margin-top:16px;border-top:1px solid var(--line);padding-top:12px;}
+  .logger-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0;font-size:14px;}
+  .logger-name{font-weight:600;}
+  .logger-meta{color:var(--muted);font-size:13px;white-space:nowrap;}
   #config-warning{background:var(--banner-bg);border:1px solid var(--rust);color:var(--rust);padding:16px 20px;border-radius:4px;margin:20px 0;font-size:14px;line-height:1.5;}
   code{background:rgba(0,0,0,0.06);padding:1px 5px;border-radius:3px;}
   [data-theme="dark"] code, [data-theme="ocean"] code{background:rgba(255,255,255,0.1);}
@@ -640,6 +644,7 @@ function renderAnalyticsShell() {
   const avgLoudness = avg(entries.map(e => e.loudness_db));
   const avgSpiritual = avg(entries.map(e => e.spiritual_response));
   const avgTransition = avg(entries.map(e => e.transition_clarity));
+  const loggerCounts = loggedByCounts();
 
   return `
     <div class="stats">
@@ -658,7 +663,27 @@ function renderAnalyticsShell() {
     <div class="card"><h3 class="display">Spiritual Response (0–10)</h3><div class="chart-box"><canvas id="chart-spiritual"></canvas></div></div>
     <div class="card"><h3 class="display">Loudness (dB)</h3><div class="chart-box"><canvas id="chart-loudness"></canvas></div></div>
     <div class="card"><h3 class="display">Service Flow — % Landed Well</h3><div class="chart-box"><canvas id="chart-flow"></canvas></div></div>
+    ${loggerCounts.length ? `
+    <div class="card">
+      <h3 class="display">Who's Logging Services</h3>
+      <div class="chart-box"><canvas id="chart-loggedby"></canvas></div>
+      <div class="logger-list">
+        ${loggerCounts.map(l => `<div class="logger-row"><span class="logger-name">${escapeHtml(l.name)}</span><span class="logger-meta">${l.count} entr${l.count===1?"y":"ies"} · last ${fmtDate(l.lastDate)}</span></div>`).join("")}
+      </div>
+    </div>` : ""}
   `;
+}
+
+function loggedByCounts() {
+  const byName = new Map();
+  entries.forEach(e => {
+    if (!e.logged_by) return;
+    const cur = byName.get(e.logged_by) || { name: e.logged_by, count: 0, lastDate: e.service_date };
+    cur.count += 1;
+    if (e.service_date > cur.lastDate) cur.lastDate = e.service_date;
+    byName.set(e.logged_by, cur);
+  });
+  return [...byName.values()].sort((a, b) => b.count - a.count);
 }
 
 function themeColors() {
@@ -718,6 +743,18 @@ function renderCharts() {
   });
 
   charts = [c1, c2, c3, c4, c5];
+
+  const loggerEl = document.getElementById("chart-loggedby");
+  if (loggerEl) {
+    const loggerCounts = loggedByCounts();
+    const palette = [t.pew, t.brass, t.rust, t.c0, t.c1, t.c2, t.c3];
+    const c6 = new Chart(loggerEl, {
+      type: "bar",
+      data: { labels: loggerCounts.map(l=>l.name), datasets: [{ label: "Entries Logged", data: loggerCounts.map(l=>l.count), backgroundColor: loggerCounts.map((_,i)=>palette[i % palette.length]), borderRadius: 3 }] },
+      options: { indexAxis: "y", plugins: { legend: { display:false } }, scales: { x:{ beginAtZero:true, ticks:{ precision:0 }, grid:{color:t.line} }, y:{ grid:{display:false} } } }
+    });
+    charts.push(c6);
+  }
 }
 
 async function loadPcoPlans(force) {
