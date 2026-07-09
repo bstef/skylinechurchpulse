@@ -17,6 +17,7 @@ create table if not exists public.service_entries (
   sermon_fit boolean not null default true,
   notes text default '',
   pco_plan_id text,
+  logged_by text,
   created_at timestamptz not null default now(),
   unique (pco_plan_id, service_type)
 );
@@ -68,6 +69,12 @@ alter table public.service_entries
   add column if not exists announcements_fit boolean not null default true;
 alter table public.service_entries
   add column if not exists sermon_fit boolean not null default true;
+
+-- Attribution: who logged/edited this entry, so the team knows who to ask
+-- about a given day's numbers. No login wall — just a remembered name picked
+-- client-side. Safe to re-run.
+alter table public.service_entries
+  add column if not exists logged_by text;
 
 -- Enable Row Level Security
 alter table public.service_entries enable row level security;

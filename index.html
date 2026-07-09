@@ -138,6 +138,7 @@
   .btn-secondary{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--surface);color:var(--ink);border:1px solid var(--line);padding:0 18px;font-size:15px;font-weight:600;white-space:nowrap;}
   .btn-secondary:disabled{opacity:.5;cursor:not-allowed;}
   .detail-date{color:var(--muted);font-size:14px;margin-top:-8px;}
+  .detail-logged-by{color:var(--muted);font-size:13px;margin-top:-12px;}
   .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0;}
   .detail-item{background:var(--zebra);border:1px solid var(--line);border-radius:4px;padding:14px 16px;}
   .detail-label{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px;}
@@ -196,6 +197,7 @@
   .cal-day-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
   .cal-day-card-stats{display:flex;flex-wrap:wrap;gap:16px;font-size:14px;color:var(--ink);}
   .cal-day-card-stats strong{font-family:'Fraunces',Georgia,serif;font-size:17px;}
+  .cal-day-card-logged-by{font-size:12px;color:var(--muted);margin-top:6px;}
 </style>
 </head>
 <body>
@@ -611,12 +613,12 @@ function exportCSV() {
   const header = [
     "Date", "Service", "Attendance", "Unity (1-5)", "Engagement (1-5)", "Loudness (dB)",
     "Sound Clarity (Y/N)", "Spiritual Response (0-10)", "Transition Clarity (1-5)",
-    "Lighting Fit (Y/N)", "Talking Fit (Y/N)", "Announcements Fit (Y/N)", "Sermon Fit (Y/N)", "Notes",
+    "Lighting Fit (Y/N)", "Talking Fit (Y/N)", "Announcements Fit (Y/N)", "Sermon Fit (Y/N)", "Notes", "Logged By",
   ];
   const rows = entries.map(e => [
     e.service_date, e.service_type, e.attendance, e.unity, e.engagement, e.loudness_db,
     e.sound_clarity ? "Y" : "N", e.spiritual_response, e.transition_clarity,
-    e.lighting_fit ? "Y" : "N", e.talking_fit ? "Y" : "N", e.announcements_fit ? "Y" : "N", e.sermon_fit ? "Y" : "N", e.notes || "",
+    e.lighting_fit ? "Y" : "N", e.talking_fit ? "Y" : "N", e.announcements_fit ? "Y" : "N", e.sermon_fit ? "Y" : "N", e.notes || "", e.logged_by || "",
   ]);
   const csv = [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\r\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -924,6 +926,7 @@ function renderCalendarDay() {
           <span><strong>${e.engagement}</strong>/5 engagement</span>
           <span><strong>${e.loudness_db}</strong> dB</span>
         </div>
+        ${e.logged_by ? `<div class="cal-day-card-logged-by">Logged by ${escapeHtml(e.logged_by)}</div>` : ""}
         ${e.notes ? `<div class="notes">${escapeHtml(e.notes)}</div>` : ""}
       </button>`;
     }
@@ -952,6 +955,7 @@ function openDetail(entry) {
         </div>
         <div class="modal-body">
           <div class="detail-date">${fmtDate(entry.service_date)}</div>
+          ${entry.logged_by ? `<div class="detail-logged-by">Logged by ${escapeHtml(entry.logged_by)}</div>` : ""}
           <div class="detail-grid">
             <div class="detail-item"><span class="detail-label">Attendance</span><span class="detail-value">${entry.attendance.toLocaleString()}</span></div>
             <div class="detail-item"><span class="detail-label">Loudness</span><span class="detail-value">${entry.loudness_db}<span class="unit"> dB</span></span></div>
@@ -1008,7 +1012,9 @@ function openModal(entry, pcoPlan) {
     announcementsFit: entry ? entry.announcements_fit : true,
     sermonFit: entry ? entry.sermon_fit : true,
     notes: entry ? (entry.notes || "") : "",
+    loggedBy: entry ? (entry.logged_by || "") : (localStorage.getItem("skyline-logged-by") || ""),
   };
+  const loggedByNames = [...new Set(entries.map(e => e.logged_by).filter(Boolean))].sort();
   document.getElementById("modal-slot").innerHTML = `
     <div class="modal-backdrop" id="modal-backdrop">
       <div class="modal">
@@ -1056,6 +1062,10 @@ function openModal(entry, pcoPlan) {
           </div>
 
           <label class="field"><span>Notes (optional)</span><textarea rows="2" id="f-notes" placeholder="Anything worth remembering about this service…">${escapeHtml(v.notes)}</textarea></label>
+          <label class="field"><span>Logged by *</span>
+            <input type="text" id="f-logged-by" list="logged-by-list" placeholder="Your name" value="${escapeHtml(v.loggedBy)}" autocomplete="off">
+            <datalist id="logged-by-list">${loggedByNames.map(n=>`<option value="${escapeHtml(n)}">`).join("")}</datalist>
+          </label>
           <button class="save-btn" id="f-save">${editing ? "Update Entry" : "Save Entry"}</button>
         </div>
       </div>
@@ -1080,8 +1090,10 @@ function openModal(entry, pcoPlan) {
     const loudness = document.getElementById("f-loudness").value;
     const serviceType = document.getElementById("f-service").value;
     const serviceDate = document.getElementById("f-date").value;
+    const loggedBy = document.getElementById("f-logged-by").value.trim();
     if (!serviceType) { showError("Please select a service."); return; }
     if (!attendance || !loudness) { showError("Attendance and loudness (dB) are required."); return; }
+    if (!loggedBy) { showError("Please enter your name so we know who logged this."); return; }
     if (serviceDate > today) { showError("Can't log details for a service that hasn't happened yet."); return; }
     const payload = {
       service_date: serviceDate,
@@ -1099,9 +1111,13 @@ function openModal(entry, pcoPlan) {
       sermon_fit: document.getElementById("f-sermon").value === "yes",
       notes: document.getElementById("f-notes").value.trim(),
       pco_plan_id: entry ? (entry.pco_plan_id ?? null) : (pcoPlan ? pcoPlan.plan_id : null),
+      logged_by: loggedBy,
     };
     const ok = editing ? await updateEntry(entry.id, payload) : await addEntry(payload);
-    if (ok) closeModal();
+    if (ok) {
+      localStorage.setItem("skyline-logged-by", loggedBy);
+      closeModal();
+    }
   });
 }
 function closeModal() { document.getElementById("modal-slot").innerHTML = ""; }
