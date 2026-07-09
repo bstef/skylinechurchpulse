@@ -17,6 +17,7 @@
     --c2:#A6503C; --c2-soft:rgba(166,80,60,.14);
     --c3:#3C6E8F; --c3-soft:rgba(60,110,143,.14);
     --c4:#7A5C9E; --c4-soft:rgba(122,92,158,.14);
+    --hero-grad-1:rgba(184,146,90,.22); --hero-grad-2:rgba(61,90,76,.16);
   }
   [data-theme="dark"]{
     --ink:#EDE8DA; --paper:#1B211D; --surface:#242B25; --brass:#D3AD78; --pew:#7FA491; --rust:#DD8266; --line:#3A423B; --muted:#9B9484; --field-label:#C9C2B0; --banner-bg:#3A241E; --brass-soft:rgba(211,173,120,.16); --zebra:rgba(255,255,255,.02);
@@ -25,11 +26,16 @@
     --c2:#DD8266; --c2-soft:rgba(221,130,102,.18);
     --c3:#6FA0C4; --c3-soft:rgba(111,160,196,.18);
     --c4:#A98BC9; --c4-soft:rgba(169,139,201,.18);
+    --hero-grad-1:rgba(211,173,120,.28); --hero-grad-2:rgba(127,164,145,.22);
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:'Source Sans 3',sans-serif;transition:background .2s,color .2s;}
   .display{font-family:'Fraunces',Georgia,serif;}
-  header{border-bottom:1px solid var(--line);background:linear-gradient(120deg, var(--c0-soft), var(--c1-soft));}
+  header{border-bottom:1px solid var(--line);background:linear-gradient(120deg, var(--hero-grad-1), var(--hero-grad-2));}
+  .hero-banner{width:100%;height:52px;display:block;margin-top:10px;}
+  .hero-skyline{fill:var(--ink);opacity:.10;}
+  .hero-pulse-line{fill:none;stroke:var(--brass);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;}
+  .hero-cross line{stroke:var(--rust);stroke-width:2.5;stroke-linecap:round;}
   .wrap{max-width:1080px;margin:0 auto;padding:0 24px;}
   .headtop{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;padding:28px 0 20px;}
   .logo{height:60px;display:block;margin-bottom:14px;}
@@ -57,6 +63,7 @@
     .cal-grid{gap:3px;}
     .cal-header-title{min-width:0;font-size:16px;flex:1 1 auto;}
     .cal-header-title-day{min-width:0;}
+    .hero-banner{height:32px;margin-top:6px;}
   }
   .empty{text-align:center;padding:80px 20px;color:var(--muted);}
   .empty .display{font-size:22px;margin-bottom:8px;color:var(--ink);}
@@ -205,6 +212,14 @@
       <button id="tab-log">Ledger</button>
       <button id="tab-analytics">Analytics</button>
     </nav>
+    <svg class="hero-banner" viewBox="0 0 1000 60" preserveAspectRatio="none" aria-hidden="true">
+      <path class="hero-skyline" d="M0,60 L0,48 L18,48 L18,40 L34,40 L34,52 L54,52 L54,26 L70,26 L70,44 L92,44 L92,16 L112,16 L112,44 L132,44 L132,35 L152,35 L152,50 L178,50 L178,20 L198,20 L198,50 L1000,50 L1000,60 Z"></path>
+      <path class="hero-pulse-line" d="M0,32 H360 L374,32 L386,12 L398,48 L410,20 L422,32 H478 L494,32 L498,8 L502,8 L506,32 H1000"></path>
+      <g class="hero-cross">
+        <line x1="500" y1="10" x2="500" y2="30"></line>
+        <line x1="491" y1="17" x2="509" y2="17"></line>
+      </g>
+    </svg>
   </div>
 </header>
 
@@ -696,6 +711,7 @@ async function loadPcoPlans(force) {
   if (!force && pcoLoaded) return;
   pcoLoading = true;
   pcoError = null;
+  if (force) render();
   try {
     const res = await fetch("/api/pco-plans");
     const body = await res.json().catch(() => ({}));
@@ -720,7 +736,7 @@ function renderPco() {
       <h3 class="display" style="margin:0 0 4px;">Planning Center — Plans</h3>
       <div style="color:var(--muted);font-size:13px;">Pulled live from your Services Service Types. Log Pulse details for any plan below.</div>
     </div>
-    <button class="btn-secondary" id="pco-refresh">↻ Refresh</button>
+    <button class="btn-secondary" id="pco-refresh" ${pcoLoading ? "disabled" : ""}>${pcoLoading ? "↻ Refreshing…" : "↻ Refresh"}</button>
   </div>`;
 
   if (!pcoLoaded) {
