@@ -88,7 +88,7 @@
   .pill .value span{font-size:16px;font-weight:400;color:var(--muted);}
   .card{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:24px;margin-bottom:24px;}
   .card h3{margin:0 0 20px;font-size:18px;}
-  .export-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+  .export-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:24px;}
   .export-count{color:var(--muted);font-size:14px;margin:-12px 0 18px;}
   .export-actions{display:flex;flex-direction:column;gap:10px;}
   .export-actions .btn-secondary{width:100%;justify-content:flex-start;}
@@ -260,6 +260,7 @@
       <button id="tab-log">Services</button>
       <button id="tab-analytics">Services Analytics</button>
       <button id="tab-production-analytics">Production Analytics</button>
+      <button id="tab-skyyouth-analytics">SkyYouth Analytics</button>
     </nav>
     <svg class="hero-banner" viewBox="0 0 1000 60" preserveAspectRatio="none" aria-hidden="true">
       <path class="hero-skyline" d="M0,60 L0,48 L18,48 L18,40 L34,40 L34,52 L54,52 L54,26 L70,26 L70,44 L92,44 L92,16 L112,16 L112,44 L132,44 L132,35 L152,35 L152,50 L178,50 L178,20 L198,20 L198,50 L1000,50 L1000,60 Z"></path>
@@ -330,7 +331,7 @@ const PRODUCTION_ROLES = [
 ];
 
 const LOGGING_VIEWS = ["pco", "production", "skyyouth", "calendar", "log"];
-const ANALYTICS_VIEWS = ["analytics", "production-analytics"];
+const ANALYTICS_VIEWS = ["analytics", "production-analytics", "skyyouth-analytics"];
 
 let sb = null;
 let entries = [];
@@ -403,6 +404,10 @@ function guessServiceType(pcoName) {
 // for multi-time folders like Celebration Service).
 function isSkyYouthPlan(p) {
   return guessServiceType(p.service_type_name) === "SkyYouth";
+}
+
+function skyYouthEntries() {
+  return entries.filter(e => e.service_type === "SkyYouth");
 }
 
 function yesNoSelect(id, value) {
@@ -563,6 +568,7 @@ function render() {
   document.getElementById("tab-skyyouth").classList.toggle("active", view === "skyyouth");
   document.getElementById("tab-production").classList.toggle("active", view === "production");
   document.getElementById("tab-production-analytics").classList.toggle("active", view === "production-analytics");
+  document.getElementById("tab-skyyouth-analytics").classList.toggle("active", view === "skyyouth-analytics");
   document.getElementById("page-logging").classList.toggle("active", page === "logging");
   document.getElementById("page-analytics").classList.toggle("active", page === "analytics");
   document.getElementById("page-exports").classList.toggle("active", page === "exports");
@@ -663,14 +669,24 @@ function render() {
     return;
   }
 
+  if (view === "skyyouth-analytics") {
+    const data = skyYouthEntries();
+    content.innerHTML = renderAnalyticsShell(data, { emptyBody: "Log a SkyYouth service to see trends here." });
+    renderCharts(data);
+    return;
+  }
+
   if (view === "exports") {
     content.innerHTML = renderExports();
     document.getElementById("export-services-csv").addEventListener("click", exportCSV);
     document.getElementById("export-services-pdf").addEventListener("click", exportServicesPDF);
     document.getElementById("export-production-csv").addEventListener("click", exportProductionCSV);
     document.getElementById("export-production-pdf").addEventListener("click", exportProductionPDF);
+    document.getElementById("export-skyyouth-csv").addEventListener("click", exportSkyYouthCSV);
+    document.getElementById("export-skyyouth-pdf").addEventListener("click", exportSkyYouthPDF);
     document.getElementById("print-services-analytics").addEventListener("click", () => printReport("analytics"));
     document.getElementById("print-production-analytics").addEventListener("click", () => printReport("production-analytics"));
+    document.getElementById("print-skyyouth-analytics").addEventListener("click", () => printReport("skyyouth-analytics"));
     return;
   }
 
@@ -795,20 +811,29 @@ function downloadBlob(content, mime, filename) {
   URL.revokeObjectURL(url);
 }
 
-function exportCSV() {
-  if (!entries.length) return;
+function servicesCSVRows(data) {
   const header = [
     "Date", "Service", "Attendance", "Unity (1-5)", "Engagement (1-5)", "Loudness (dB)",
     "Sound Clarity (Y/N)", "Spiritual Response (0-10)", "Transition Clarity (1-5)",
     "Lighting Fit (Y/N)", "Talking Fit (Y/N)", "Announcements Fit (Y/N)", "Sermon Fit (Y/N)", "Notes", "Logged By",
   ];
-  const rows = entries.map(e => [
+  const rows = data.map(e => [
     e.service_date, e.service_type, e.attendance, e.unity, e.engagement, e.loudness_db,
     e.sound_clarity ? "Y" : "N", e.spiritual_response, e.transition_clarity,
     e.lighting_fit ? "Y" : "N", e.talking_fit ? "Y" : "N", e.announcements_fit ? "Y" : "N", e.sermon_fit ? "Y" : "N", e.notes || "", e.logged_by || "",
   ]);
-  const csv = [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\r\n");
-  downloadBlob(csv, "text/csv;charset=utf-8;", `skyline-pulse-services-${new Date().toISOString().slice(0,10)}.csv`);
+  return [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\r\n");
+}
+
+function exportCSV() {
+  if (!entries.length) return;
+  downloadBlob(servicesCSVRows(entries), "text/csv;charset=utf-8;", `skyline-pulse-services-${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+function exportSkyYouthCSV() {
+  const data = skyYouthEntries();
+  if (!data.length) return;
+  downloadBlob(servicesCSVRows(data), "text/csv;charset=utf-8;", `skyline-pulse-skyyouth-${new Date().toISOString().slice(0,10)}.csv`);
 }
 
 function exportProductionCSV() {
@@ -838,22 +863,34 @@ function pdfDoc(title) {
   return doc;
 }
 
-function exportServicesPDF() {
-  if (!entries.length) return;
-  const doc = pdfDoc("Services");
+function addServicesTable(doc, data) {
   doc.autoTable({
     startY: 26,
     styles: { fontSize: 8 },
     headStyles: { fillColor: [40, 118, 255] },
     head: [["Date", "Service", "Attend.", "Unity", "Engage.", "dB", "Sound", "Spiritual", "Transition", "Lighting", "Talking", "Announce.", "Sermon", "Logged By", "Notes"]],
-    body: entries.map(e => [
+    body: data.map(e => [
       fmtDate(e.service_date), e.service_type, e.attendance, `${e.unity}/5`, `${e.engagement}/5`, e.loudness_db,
       e.sound_clarity ? "Y" : "N", `${e.spiritual_response}/10`, `${e.transition_clarity}/5`,
       e.lighting_fit ? "Y" : "N", e.talking_fit ? "Y" : "N", e.announcements_fit ? "Y" : "N", e.sermon_fit ? "Y" : "N",
       e.logged_by || "", e.notes || "",
     ]),
   });
+}
+
+function exportServicesPDF() {
+  if (!entries.length) return;
+  const doc = pdfDoc("Services");
+  addServicesTable(doc, entries);
   doc.save(`skyline-pulse-services-${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
+function exportSkyYouthPDF() {
+  const data = skyYouthEntries();
+  if (!data.length) return;
+  const doc = pdfDoc("SkyYouth");
+  addServicesTable(doc, data);
+  doc.save(`skyline-pulse-skyyouth-${new Date().toISOString().slice(0,10)}.pdf`);
 }
 
 function exportProductionPDF() {
@@ -901,19 +938,35 @@ function renderExports() {
           <button class="btn-secondary" id="print-production-analytics">Print Production Analytics report</button>
         </div>
       </div>
+      <div class="card">
+        <h3 class="display">SkyYouth</h3>
+        <div class="export-count">${skyYouthEntries().length} logged</div>
+        <div class="export-actions">
+          <button class="btn-secondary" id="export-skyyouth-csv" ${skyYouthEntries().length === 0 ? "disabled" : ""}>⬇ CSV</button>
+          <button class="btn-secondary" id="export-skyyouth-pdf" ${skyYouthEntries().length === 0 ? "disabled" : ""}>⬇ PDF (table)</button>
+          <button class="btn-secondary" id="print-skyyouth-analytics">Print SkyYouth Analytics report</button>
+        </div>
+      </div>
     </div>
   `;
 }
 
-function renderAnalyticsShell() {
-  const sorted = [...entries].sort((a,b) => a.service_date.localeCompare(b.service_date));
-  const avgAttendance = avg(entries.map(e => e.attendance));
-  const avgUnity = avg(entries.map(e => e.unity));
-  const avgEngagement = avg(entries.map(e => e.engagement));
-  const avgLoudness = avg(entries.map(e => e.loudness_db));
-  const avgSpiritual = avg(entries.map(e => e.spiritual_response));
-  const avgTransition = avg(entries.map(e => e.transition_clarity));
-  const loggerCounts = loggedByCounts();
+function renderAnalyticsShell(data = entries, opts = {}) {
+  if (data.length === 0) {
+    return `<div class="empty">
+      <div class="display">Nothing logged yet.</div>
+      <div>${opts.emptyBody || "Log a service to see trends here."}</div>
+    </div>`;
+  }
+
+  const sorted = [...data].sort((a,b) => a.service_date.localeCompare(b.service_date));
+  const avgAttendance = avg(data.map(e => e.attendance));
+  const avgUnity = avg(data.map(e => e.unity));
+  const avgEngagement = avg(data.map(e => e.engagement));
+  const avgLoudness = avg(data.map(e => e.loudness_db));
+  const avgSpiritual = avg(data.map(e => e.spiritual_response));
+  const avgTransition = avg(data.map(e => e.transition_clarity));
+  const loggerCounts = loggedByCountsIn(data);
 
   return `
     <div class="stats">
@@ -923,7 +976,7 @@ function renderAnalyticsShell() {
       <div class="pill"><div class="label">Avg Loudness</div><div class="value">${avgLoudness.toFixed(0)}<span> dB</span></div></div>
     </div>
     <div class="stats">
-      <div class="pill"><div class="label">Sound Clarity</div><div class="value">${pctTrue("sound_clarity")}<span>%</span></div></div>
+      <div class="pill"><div class="label">Sound Clarity</div><div class="value">${pctTrueIn(data, "sound_clarity")}<span>%</span></div></div>
       <div class="pill"><div class="label">Avg Spiritual Response</div><div class="value">${avgSpiritual.toFixed(1)}<span>/10</span></div></div>
       <div class="pill"><div class="label">Avg Transition Clarity</div><div class="value">${avgTransition.toFixed(1)}<span>/5</span></div></div>
     </div>
@@ -934,7 +987,7 @@ function renderAnalyticsShell() {
     <div class="card"><h3 class="display">Service Flow — % Landed Well</h3><div class="chart-box"><canvas id="chart-flow"></canvas></div></div>
     ${loggerCounts.length ? `
     <div class="card">
-      <h3 class="display">Who's Logging Services</h3>
+      <h3 class="display">Who's Logging</h3>
       <div class="chart-box"><canvas id="chart-loggedby"></canvas></div>
       <div class="logger-list">
         ${loggerCounts.map(l => `<div class="logger-row"><span class="logger-name">${escapeHtml(l.name)}</span><span class="logger-meta">${l.count} entr${l.count===1?"y":"ies"} · last ${fmtDate(l.lastDate)}</span></div>`).join("")}
@@ -965,8 +1018,8 @@ function themeColors() {
   };
 }
 
-function renderCharts() {
-  const sorted = [...entries].sort((a,b) => a.service_date.localeCompare(b.service_date)).slice(-8);
+function renderCharts(data = entries) {
+  const sorted = [...data].sort((a,b) => a.service_date.localeCompare(b.service_date)).slice(-8);
   const labels = sorted.map(e => fmtDate(e.service_date));
   const t = themeColors();
   Chart.defaults.color = t.ink;
@@ -1008,7 +1061,7 @@ function renderCharts() {
   ];
   const c5 = new Chart(document.getElementById("chart-flow"), {
     type: "bar",
-    data: { labels: flowFields.map(f=>f.label), datasets: [{ label: "% Landed Well", data: flowFields.map(f=>pctTrue(f.key)), backgroundColor: flowFields.map(f=>f.color), borderRadius: 3 }] },
+    data: { labels: flowFields.map(f=>f.label), datasets: [{ label: "% Landed Well", data: flowFields.map(f=>pctTrueIn(data, f.key)), backgroundColor: flowFields.map(f=>f.color), borderRadius: 3 }] },
     options: { plugins: { legend: { display:false } }, scales: { x:{grid:{display:false}}, y:{min:0,max:100,grid:{color:t.line}} } }
   });
 
@@ -1016,7 +1069,7 @@ function renderCharts() {
 
   const loggerEl = document.getElementById("chart-loggedby");
   if (loggerEl) {
-    const loggerCounts = loggedByCounts();
+    const loggerCounts = loggedByCountsIn(data);
     const palette = [t.pew, t.brass, t.rust, t.c0, t.c1, t.c2, t.c3];
     const c6 = new Chart(loggerEl, {
       type: "bar",
@@ -1631,6 +1684,7 @@ document.getElementById("tab-pco").addEventListener("click", () => setView("pco"
 document.getElementById("tab-skyyouth").addEventListener("click", () => setView("skyyouth"));
 document.getElementById("tab-production").addEventListener("click", () => setView("production"));
 document.getElementById("tab-production-analytics").addEventListener("click", () => setView("production-analytics"));
+document.getElementById("tab-skyyouth-analytics").addEventListener("click", () => setView("skyyouth-analytics"));
 document.getElementById("page-logging").addEventListener("click", () => setView(lastLoggingView));
 document.getElementById("page-analytics").addEventListener("click", () => setView(lastAnalyticsView));
 document.getElementById("page-exports").addEventListener("click", () => setView("exports"));
