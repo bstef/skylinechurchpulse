@@ -88,6 +88,11 @@
   .pill .value span{font-size:16px;font-weight:400;color:var(--muted);}
   .card{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:24px;margin-bottom:24px;}
   .card h3{margin:0 0 20px;font-size:18px;}
+  .export-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+  .export-count{color:var(--muted);font-size:14px;margin:-12px 0 18px;}
+  .export-actions{display:flex;flex-direction:column;gap:10px;}
+  .export-actions .btn-secondary{width:100%;justify-content:flex-start;}
+  @media (max-width:640px){ .export-grid{grid-template-columns:1fr;} }
   table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);}
   thead th{text-align:left;padding:13px 20px;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--zebra);}
   thead th.num,tbody td.num{text-align:right;}
@@ -238,14 +243,14 @@
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
         <button class="theme-toggle" id="theme-toggle" title="Cycle theme (Light / Dark / Ocean)"></button>
-        <button class="btn-secondary" id="export-btn" title="Export as CSV">⬇ Export</button>
-        <button class="btn-secondary" id="pdf-btn" title="Export as PDF">⬇ PDF</button>
+        <button class="btn-secondary" id="open-production-form-btn">+ Log Production</button>
         <button class="btn-primary" id="open-form-btn">+ Log a Service</button>
       </div>
     </div>
     <div class="page-toggle">
       <button class="page-toggle-btn active" id="page-logging">Logging</button>
       <button class="page-toggle-btn" id="page-analytics">Analytics</button>
+      <button class="page-toggle-btn" id="page-exports">Exports</button>
     </div>
     <nav>
       <button id="tab-pco" class="active">Planning Center</button>
@@ -536,33 +541,16 @@ async function removeProductionEntry(id) {
 
 function destroyCharts() { charts.forEach(c => c.destroy()); charts = []; }
 
-const PDF_TABLE_VIEWS = { log: "Export services as PDF", production: "Export production log as PDF" };
-const PDF_PRINT_VIEWS = { analytics: "Print / save this view as PDF", "production-analytics": "Print / save this view as PDF" };
-
-function updatePdfButton() {
-  const btn = document.getElementById("pdf-btn");
-  if (view in PDF_TABLE_VIEWS) {
-    btn.disabled = (view === "log" ? entries : productionEntries).length === 0;
-    btn.title = PDF_TABLE_VIEWS[view];
-  } else if (view in PDF_PRINT_VIEWS) {
-    btn.disabled = false;
-    btn.title = PDF_PRINT_VIEWS[view];
-  } else {
-    btn.disabled = true;
-    btn.title = "PDF export isn't available on this tab";
-  }
-}
-
-function handlePdfClick() {
-  if (view === "log") exportServicesPDF();
-  else if (view === "production") exportProductionPDF();
-  else if (view === "analytics" || view === "production-analytics") window.print();
+function printReport(targetView) {
+  setView(targetView);
+  setTimeout(() => window.print(), 350);
 }
 
 function setView(v) {
   view = v;
   if (LOGGING_VIEWS.includes(v)) { page = "logging"; lastLoggingView = v; }
   else if (ANALYTICS_VIEWS.includes(v)) { page = "analytics"; lastAnalyticsView = v; }
+  else if (v === "exports") { page = "exports"; }
   render();
 }
 
@@ -577,10 +565,9 @@ function render() {
   document.getElementById("tab-production-analytics").classList.toggle("active", view === "production-analytics");
   document.getElementById("page-logging").classList.toggle("active", page === "logging");
   document.getElementById("page-analytics").classList.toggle("active", page === "analytics");
+  document.getElementById("page-exports").classList.toggle("active", page === "exports");
   LOGGING_VIEWS.forEach(v => document.getElementById(`tab-${v}`).classList.toggle("page-hidden", page !== "logging"));
   ANALYTICS_VIEWS.forEach(v => document.getElementById(`tab-${v}`).classList.toggle("page-hidden", page !== "analytics"));
-  document.getElementById("export-btn").disabled = entries.length === 0;
-  updatePdfButton();
   destroyCharts();
 
   if (!configured()) {
@@ -673,6 +660,17 @@ function render() {
   if (view === "production-analytics") {
     content.innerHTML = renderProductionAnalyticsShell();
     renderProductionCharts();
+    return;
+  }
+
+  if (view === "exports") {
+    content.innerHTML = renderExports();
+    document.getElementById("export-services-csv").addEventListener("click", exportCSV);
+    document.getElementById("export-services-pdf").addEventListener("click", exportServicesPDF);
+    document.getElementById("export-production-csv").addEventListener("click", exportProductionCSV);
+    document.getElementById("export-production-pdf").addEventListener("click", exportProductionPDF);
+    document.getElementById("print-services-analytics").addEventListener("click", () => printReport("analytics"));
+    document.getElementById("print-production-analytics").addEventListener("click", () => printReport("production-analytics"));
     return;
   }
 
@@ -785,6 +783,18 @@ function csvEscape(val) {
   return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 
+function downloadBlob(content, mime, filename) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function exportCSV() {
   if (!entries.length) return;
   const header = [
@@ -798,15 +808,22 @@ function exportCSV() {
     e.lighting_fit ? "Y" : "N", e.talking_fit ? "Y" : "N", e.announcements_fit ? "Y" : "N", e.sermon_fit ? "Y" : "N", e.notes || "", e.logged_by || "",
   ]);
   const csv = [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\r\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `skyline-pulse-services-${new Date().toISOString().slice(0,10)}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  downloadBlob(csv, "text/csv;charset=utf-8;", `skyline-pulse-services-${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+function exportProductionCSV() {
+  if (!productionEntries.length) return;
+  const header = [
+    "Date", "Service", ...PRODUCTION_ROLES.flatMap(r => [`${r.label} Present (Y/N)`, `${r.label} Name`]),
+    "Slides Sync (Y/N)", "Camera Direction (Y/N)", "Notes", "Logged By",
+  ];
+  const rows = productionEntries.map(e => [
+    e.service_date, e.service_type,
+    ...PRODUCTION_ROLES.flatMap(r => [e[`${r.key}_present`] ? "Y" : "N", e[`${r.key}_name`] || ""]),
+    e.slides_sync_fit ? "Y" : "N", e.camera_direction_fit ? "Y" : "N", e.notes || "", e.logged_by || "",
+  ]);
+  const csv = [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\r\n");
+  downloadBlob(csv, "text/csv;charset=utf-8;", `skyline-pulse-production-${new Date().toISOString().slice(0,10)}.csv`);
 }
 
 function pdfDoc(title) {
@@ -855,6 +872,37 @@ function exportProductionPDF() {
     ]),
   });
   doc.save(`skyline-pulse-production-${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
+function renderExports() {
+  return `
+    <div class="pco-header">
+      <div>
+        <h3 class="display" style="margin:0 0 4px;">Exports</h3>
+        <div style="color:var(--muted);font-size:13px;">Download your data as CSV or PDF, or print a chart report to save as PDF.</div>
+      </div>
+    </div>
+    <div class="export-grid">
+      <div class="card">
+        <h3 class="display">Services</h3>
+        <div class="export-count">${entries.length} logged</div>
+        <div class="export-actions">
+          <button class="btn-secondary" id="export-services-csv" ${entries.length === 0 ? "disabled" : ""}>⬇ CSV</button>
+          <button class="btn-secondary" id="export-services-pdf" ${entries.length === 0 ? "disabled" : ""}>⬇ PDF (table)</button>
+          <button class="btn-secondary" id="print-services-analytics">Print Services Analytics report</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="display">Production</h3>
+        <div class="export-count">${productionEntries.length} logged</div>
+        <div class="export-actions">
+          <button class="btn-secondary" id="export-production-csv" ${productionEntries.length === 0 ? "disabled" : ""}>⬇ CSV</button>
+          <button class="btn-secondary" id="export-production-pdf" ${productionEntries.length === 0 ? "disabled" : ""}>⬇ PDF (table)</button>
+          <button class="btn-secondary" id="print-production-analytics">Print Production Analytics report</button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderAnalyticsShell() {
@@ -1575,6 +1623,7 @@ function openProductionModal(entry) {
 }
 
 document.getElementById("open-form-btn").addEventListener("click", () => openModal());
+document.getElementById("open-production-form-btn").addEventListener("click", () => openProductionModal());
 document.getElementById("tab-log").addEventListener("click", () => setView("log"));
 document.getElementById("tab-calendar").addEventListener("click", () => setView("calendar"));
 document.getElementById("tab-analytics").addEventListener("click", () => setView("analytics"));
@@ -1584,9 +1633,8 @@ document.getElementById("tab-production").addEventListener("click", () => setVie
 document.getElementById("tab-production-analytics").addEventListener("click", () => setView("production-analytics"));
 document.getElementById("page-logging").addEventListener("click", () => setView(lastLoggingView));
 document.getElementById("page-analytics").addEventListener("click", () => setView(lastAnalyticsView));
+document.getElementById("page-exports").addEventListener("click", () => setView("exports"));
 document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
-document.getElementById("export-btn").addEventListener("click", exportCSV);
-document.getElementById("pdf-btn").addEventListener("click", handlePdfClick);
 document.getElementById("footer-year").textContent = new Date().getFullYear();
 
 applyTheme(getStoredTheme());
