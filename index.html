@@ -9,6 +9,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
 <style>
   :root{
     --ink:#1F2A24; --paper:#F6F3EC; --surface:#FFFFFF; --brass:#B8925A; --pew:#2876FF; --rust:#A6503C; --line:#D8D1C0; --muted:#8A8375; --field-label:#5B5546; --banner-bg:#F3E4DE; --brass-soft:rgba(184,146,90,.14); --zebra:rgba(31,42,36,.02);
@@ -211,6 +213,15 @@
   .cal-day-card-stats{display:flex;flex-wrap:wrap;gap:16px;font-size:14px;color:var(--ink);}
   .cal-day-card-stats strong{font-family:'Fraunces',Georgia,serif;font-size:17px;}
   .cal-day-card-logged-by{font-size:12px;color:var(--muted);margin-top:6px;}
+
+  @media print{
+    header, footer, #modal-slot, #toast-slot, #error-slot, #config-slot, button{display:none !important;}
+    body{background:#fff;color:#000;}
+    main{padding:0;max-width:100%;}
+    .card{break-inside:avoid;border:1px solid #ccc;box-shadow:none;}
+    .chart-box{height:240px;}
+    .pill,.detail-item{border:1px solid #ccc;}
+  }
 </style>
 </head>
 <body>
@@ -223,13 +234,15 @@
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
         <button class="theme-toggle" id="theme-toggle" title="Cycle theme (Light / Dark / Ocean)"></button>
-        <button class="btn-secondary" id="export-btn" title="Export ledger as CSV">⬇ Export</button>
+        <button class="btn-secondary" id="export-btn" title="Export as CSV">⬇ Export</button>
+        <button class="btn-secondary" id="pdf-btn" title="Export as PDF">⬇ PDF</button>
         <button class="btn-primary" id="open-form-btn">+ Log a Service</button>
       </div>
     </div>
     <nav>
       <button id="tab-pco" class="active">Planning Center</button>
       <button id="tab-production">Production</button>
+      <button id="tab-production-analytics">Production Analytics</button>
       <button id="tab-skyyouth">SkyYouth</button>
       <button id="tab-calendar">Calendar</button>
       <button id="tab-log">Services</button>
@@ -414,7 +427,8 @@ function fmtDate(d) {
   return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 function avg(arr) { return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
-function pctTrue(field) { return entries.length ? Math.round(100 * entries.filter(e => e[field]).length / entries.length) : 0; }
+function pctTrueIn(arr, field) { return arr.length ? Math.round(100 * arr.filter(e => e[field]).length / arr.length) : 0; }
+function pctTrue(field) { return pctTrueIn(entries, field); }
 function showError(msg) {
   document.getElementById("error-slot").innerHTML = msg ? `<div class="error-banner">${msg}</div>` : "";
 }
@@ -508,6 +522,29 @@ async function removeProductionEntry(id) {
 
 function destroyCharts() { charts.forEach(c => c.destroy()); charts = []; }
 
+const PDF_TABLE_VIEWS = { log: "Export services as PDF", production: "Export production log as PDF" };
+const PDF_PRINT_VIEWS = { analytics: "Print / save this view as PDF", "production-analytics": "Print / save this view as PDF" };
+
+function updatePdfButton() {
+  const btn = document.getElementById("pdf-btn");
+  if (view in PDF_TABLE_VIEWS) {
+    btn.disabled = (view === "log" ? entries : productionEntries).length === 0;
+    btn.title = PDF_TABLE_VIEWS[view];
+  } else if (view in PDF_PRINT_VIEWS) {
+    btn.disabled = false;
+    btn.title = PDF_PRINT_VIEWS[view];
+  } else {
+    btn.disabled = true;
+    btn.title = "PDF export isn't available on this tab";
+  }
+}
+
+function handlePdfClick() {
+  if (view === "log") exportServicesPDF();
+  else if (view === "production") exportProductionPDF();
+  else if (view === "analytics" || view === "production-analytics") window.print();
+}
+
 function render() {
   const content = document.getElementById("content");
   document.getElementById("tab-log").classList.toggle("active", view === "log");
@@ -516,7 +553,9 @@ function render() {
   document.getElementById("tab-pco").classList.toggle("active", view === "pco");
   document.getElementById("tab-skyyouth").classList.toggle("active", view === "skyyouth");
   document.getElementById("tab-production").classList.toggle("active", view === "production");
+  document.getElementById("tab-production-analytics").classList.toggle("active", view === "production-analytics");
   document.getElementById("export-btn").disabled = entries.length === 0;
+  updatePdfButton();
   destroyCharts();
 
   if (!configured()) {
@@ -603,6 +642,12 @@ function render() {
     content.querySelectorAll(".prod-del-btn").forEach(btn => {
       btn.addEventListener("click", (e) => { e.stopPropagation(); removeProductionEntry(btn.dataset.id); });
     });
+    return;
+  }
+
+  if (view === "production-analytics") {
+    content.innerHTML = renderProductionAnalyticsShell();
+    renderProductionCharts();
     return;
   }
 
@@ -732,11 +777,59 @@ function exportCSV() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `skyline-pulse-ledger-${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `skyline-pulse-services-${new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+function pdfDoc(title) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: "landscape" });
+  doc.setFontSize(14);
+  doc.text(`Skyline Pulse — ${title}`, 14, 14);
+  doc.setFontSize(10);
+  doc.setTextColor(120);
+  doc.text(`Generated ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`, 14, 20);
+  doc.setTextColor(0);
+  return doc;
+}
+
+function exportServicesPDF() {
+  if (!entries.length) return;
+  const doc = pdfDoc("Services");
+  doc.autoTable({
+    startY: 26,
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [40, 118, 255] },
+    head: [["Date", "Service", "Attend.", "Unity", "Engage.", "dB", "Sound", "Spiritual", "Transition", "Lighting", "Talking", "Announce.", "Sermon", "Logged By", "Notes"]],
+    body: entries.map(e => [
+      fmtDate(e.service_date), e.service_type, e.attendance, `${e.unity}/5`, `${e.engagement}/5`, e.loudness_db,
+      e.sound_clarity ? "Y" : "N", `${e.spiritual_response}/10`, `${e.transition_clarity}/5`,
+      e.lighting_fit ? "Y" : "N", e.talking_fit ? "Y" : "N", e.announcements_fit ? "Y" : "N", e.sermon_fit ? "Y" : "N",
+      e.logged_by || "", e.notes || "",
+    ]),
+  });
+  doc.save(`skyline-pulse-services-${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
+function exportProductionPDF() {
+  if (!productionEntries.length) return;
+  const doc = pdfDoc("Production");
+  doc.autoTable({
+    startY: 26,
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [40, 118, 255] },
+    head: [["Date", "Service", ...PRODUCTION_ROLES.map(r => r.label), "Slides Sync", "Camera Direction", "Logged By", "Notes"]],
+    body: productionEntries.map(e => [
+      fmtDate(e.service_date), e.service_type,
+      ...PRODUCTION_ROLES.map(r => e[`${r.key}_present`] ? (e[`${r.key}_name`] ? `Y (${e[`${r.key}_name`]})` : "Y") : "N"),
+      e.slides_sync_fit ? "Y" : "N", e.camera_direction_fit ? "Y" : "N",
+      e.logged_by || "", e.notes || "",
+    ]),
+  });
+  doc.save(`skyline-pulse-production-${new Date().toISOString().slice(0,10)}.pdf`);
 }
 
 function renderAnalyticsShell() {
@@ -777,9 +870,9 @@ function renderAnalyticsShell() {
   `;
 }
 
-function loggedByCounts() {
+function loggedByCountsIn(arr) {
   const byName = new Map();
-  entries.forEach(e => {
+  arr.forEach(e => {
     if (!e.logged_by) return;
     const cur = byName.get(e.logged_by) || { name: e.logged_by, count: 0, lastDate: e.service_date };
     cur.count += 1;
@@ -788,13 +881,14 @@ function loggedByCounts() {
   });
   return [...byName.values()].sort((a, b) => b.count - a.count);
 }
+function loggedByCounts() { return loggedByCountsIn(entries); }
 
 function themeColors() {
   const cs = getComputedStyle(document.documentElement);
   const v = (name) => cs.getPropertyValue(name).trim();
   return {
     ink: v("--ink"), pew: v("--pew"), brass: v("--brass"), rust: v("--rust"), line: v("--line"),
-    c0: v("--c0"), c1: v("--c1"), c2: v("--c2"), c3: v("--c3"),
+    c0: v("--c0"), c1: v("--c1"), c2: v("--c2"), c3: v("--c3"), c4: v("--c4"),
   };
 }
 
@@ -857,6 +951,71 @@ function renderCharts() {
       options: { indexAxis: "y", plugins: { legend: { display:false } }, scales: { x:{ beginAtZero:true, ticks:{ precision:0 }, grid:{color:t.line} }, y:{ grid:{display:false} } } }
     });
     charts.push(c6);
+  }
+}
+
+function renderProductionAnalyticsShell() {
+  if (productionEntries.length === 0) {
+    return `<div class="empty">
+      <div class="display">Nothing logged yet.</div>
+      <div>Log your first production report to start tracking role attendance and fit checks.</div>
+    </div>`;
+  }
+
+  const avgRolesPresent = avg(productionEntries.map(e => PRODUCTION_ROLES.filter(r => e[`${r.key}_present`]).length));
+  const loggerCounts = loggedByCountsIn(productionEntries);
+
+  return `
+    <div class="stats">
+      <div class="pill"><div class="label">Logged</div><div class="value">${productionEntries.length}</div></div>
+      <div class="pill"><div class="label">Avg Roles Present</div><div class="value">${avgRolesPresent.toFixed(1)}<span>/${PRODUCTION_ROLES.length}</span></div></div>
+      <div class="pill"><div class="label">Slides Synced</div><div class="value">${pctTrueIn(productionEntries, "slides_sync_fit")}<span>%</span></div></div>
+      <div class="pill"><div class="label">Camera Direction</div><div class="value">${pctTrueIn(productionEntries, "camera_direction_fit")}<span>%</span></div></div>
+    </div>
+    <div class="card"><h3 class="display">Role Attendance — % Present</h3><div class="chart-box"><canvas id="chart-role-attendance"></canvas></div></div>
+    <div class="card"><h3 class="display">Fit Checks — % Landed Well</h3><div class="chart-box"><canvas id="chart-production-fit"></canvas></div></div>
+    ${loggerCounts.length ? `
+    <div class="card">
+      <h3 class="display">Who's Logging Production</h3>
+      <div class="chart-box"><canvas id="chart-production-loggedby"></canvas></div>
+      <div class="logger-list">
+        ${loggerCounts.map(l => `<div class="logger-row"><span class="logger-name">${escapeHtml(l.name)}</span><span class="logger-meta">${l.count} entr${l.count===1?"y":"ies"} · last ${fmtDate(l.lastDate)}</span></div>`).join("")}
+      </div>
+    </div>` : ""}
+  `;
+}
+
+function renderProductionCharts() {
+  if (productionEntries.length === 0) return;
+  const t = themeColors();
+  Chart.defaults.color = t.ink;
+  Chart.defaults.borderColor = t.line;
+
+  const rolePalette = [t.c0, t.c1, t.c2, t.c3, t.c4];
+  const c1 = new Chart(document.getElementById("chart-role-attendance"), {
+    type: "bar",
+    data: { labels: PRODUCTION_ROLES.map(r=>r.label), datasets: [{ label: "% Present", data: PRODUCTION_ROLES.map(r=>pctTrueIn(productionEntries, `${r.key}_present`)), backgroundColor: PRODUCTION_ROLES.map((_,i)=>rolePalette[i % rolePalette.length]), borderRadius: 3 }] },
+    options: { plugins: { legend: { display:false } }, scales: { x:{grid:{display:false}}, y:{min:0,max:100,grid:{color:t.line}} } }
+  });
+
+  const c2 = new Chart(document.getElementById("chart-production-fit"), {
+    type: "bar",
+    data: { labels: ["Slides Sync", "Camera Direction"], datasets: [{ label: "% Landed Well", data: [pctTrueIn(productionEntries, "slides_sync_fit"), pctTrueIn(productionEntries, "camera_direction_fit")], backgroundColor: [t.pew, t.rust], borderRadius: 3 }] },
+    options: { plugins: { legend: { display:false } }, scales: { x:{grid:{display:false}}, y:{min:0,max:100,grid:{color:t.line}} } }
+  });
+
+  charts = [c1, c2];
+
+  const loggerEl = document.getElementById("chart-production-loggedby");
+  if (loggerEl) {
+    const loggerCounts = loggedByCountsIn(productionEntries);
+    const palette = [t.pew, t.brass, t.rust, t.c0, t.c1, t.c2, t.c3];
+    const c3 = new Chart(loggerEl, {
+      type: "bar",
+      data: { labels: loggerCounts.map(l=>l.name), datasets: [{ label: "Entries Logged", data: loggerCounts.map(l=>l.count), backgroundColor: loggerCounts.map((_,i)=>palette[i % palette.length]), borderRadius: 3 }] },
+      options: { indexAxis: "y", plugins: { legend: { display:false } }, scales: { x:{ beginAtZero:true, ticks:{ precision:0 }, grid:{color:t.line} }, y:{ grid:{display:false} } } }
+    });
+    charts.push(c3);
   }
 }
 
@@ -1397,8 +1556,10 @@ document.getElementById("tab-analytics").addEventListener("click", () => { view 
 document.getElementById("tab-pco").addEventListener("click", () => { view = "pco"; render(); });
 document.getElementById("tab-skyyouth").addEventListener("click", () => { view = "skyyouth"; render(); });
 document.getElementById("tab-production").addEventListener("click", () => { view = "production"; render(); });
+document.getElementById("tab-production-analytics").addEventListener("click", () => { view = "production-analytics"; render(); });
 document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
 document.getElementById("export-btn").addEventListener("click", exportCSV);
+document.getElementById("pdf-btn").addEventListener("click", handlePdfClick);
 document.getElementById("footer-year").textContent = new Date().getFullYear();
 
 applyTheme(getStoredTheme());
