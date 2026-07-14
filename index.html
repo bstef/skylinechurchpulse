@@ -691,7 +691,13 @@ function render() {
   }
 
   if (entries.length === 0) {
-    content.innerHTML = `<div class="empty">
+    const header = view === "log" ? `<div class="pco-header">
+      <div>
+        <h3 class="display" style="margin:0 0 4px;">Services</h3>
+        <div style="color:var(--muted);font-size:13px;">Every logged service, filterable by type. Click a row for full details, or use the icons to edit or delete.</div>
+      </div>
+    </div>` : "";
+    content.innerHTML = `${header}<div class="empty">
       <div class="display">Nothing logged yet.</div>
       <div>Log your first service to start tracking attendance, unity, engagement, and loudness.</div>
     </div>`;
@@ -719,6 +725,13 @@ function render() {
 }
 
 function renderLog() {
+  const header = `<div class="pco-header">
+    <div>
+      <h3 class="display" style="margin:0 0 4px;">Services</h3>
+      <div style="color:var(--muted);font-size:13px;">Every logged service, filterable by type. Click a row for full details, or use the icons to edit or delete.</div>
+    </div>
+  </div>`;
+
   const typesPresent = SERVICE_TYPES.filter(s => entries.some(e => e.service_type === s));
   const filterRow = `<div class="filter-row">
     <button class="filter-chip ${filterType === "All" ? "all-active" : ""}" data-filter="All">All (${entries.length})</button>
@@ -731,7 +744,7 @@ function renderLog() {
   const filtered = filterType === "All" ? entries : entries.filter(e => e.service_type === filterType);
 
   if (filtered.length === 0) {
-    return `${filterRow}<div class="filter-empty">No entries for ${escapeHtml(filterType)}.</div>`;
+    return `${header}${filterRow}<div class="filter-empty">No entries for ${escapeHtml(filterType)}.</div>`;
   }
 
   const rows = filtered.map(e => `
@@ -747,7 +760,7 @@ function renderLog() {
         <button class="icon-btn del-btn" data-id="${e.id}" title="Delete">✕</button>
       </td>
     </tr>`).join("");
-  return `${filterRow}<div class="table-scroll"><table>
+  return `${header}${filterRow}<div class="table-scroll"><table>
     <thead><tr><th>Date</th><th>Service</th><th class="num">Attend.</th><th class="num">Unity</th><th class="num">Engage.</th><th class="num">dB</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
@@ -1295,11 +1308,17 @@ function wirePcoTabHandlers(content, filterState) {
 }
 
 function renderCalendar() {
+  const header = `<div class="pco-header">
+    <div>
+      <h3 class="display" style="margin:0 0 4px;">Calendar</h3>
+      <div style="color:var(--muted);font-size:13px;">See what's logged and what's still needed for any day — month grid or a focused day agenda.</div>
+    </div>
+  </div>`;
   const toggle = `<div class="cal-view-toggle">
     <button class="cal-toggle-btn ${calendarView === "month" ? "active" : ""}" id="cal-view-month">Month</button>
     <button class="cal-toggle-btn ${calendarView === "day" ? "active" : ""}" id="cal-view-day">Day</button>
   </div>`;
-  return toggle + (calendarView === "day" ? renderCalendarDay() : renderCalendarMonth());
+  return header + toggle + (calendarView === "day" ? renderCalendarDay() : renderCalendarMonth());
 }
 
 function renderCalendarMonth() {
