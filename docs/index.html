@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Skyline Pulse — Weekly Service Intelligence for Skyline Church</title>
-<meta name="description" content="Skyline Pulse tracks attendance, unity, engagement, room experience, and service flow for every gathering at Skyline Church — pulled straight from Planning Center, with no login required.">
+<meta name="description" content="Skyline Pulse tracks attendance, unity, engagement, room experience, service flow, and production/tech readiness for every gathering at Skyline Church — pulled straight from Planning Center, with no login required.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -82,7 +82,7 @@
   .metric-cell .num{font-family:'Fraunces',Georgia,serif;font-size:34px;font-weight:700;color:var(--pew);}
   .metric-cell .lbl{color:var(--muted);font-size:13px;margin-top:4px;}
 
-  .stack-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;text-align:center;}
+  .stack-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:20px;text-align:center;}
   .stack-item{padding:24px 12px;}
   .stack-item .name{font-family:'Fraunces',Georgia,serif;font-size:18px;margin-bottom:6px;}
   .stack-item p{color:var(--muted);font-size:14px;margin:0;}
@@ -132,7 +132,7 @@
   <div class="wrap">
     <span class="hero-eyebrow">Skyline Church · NJ</span>
     <h1 class="display">Know how every<br>service actually went.</h1>
-    <p class="lede">Skyline Pulse is a lightweight weekly ledger for worship teams — attendance, unity, engagement, room experience, and service flow, logged in under a minute and pulled straight from your Planning Center Plans.</p>
+    <p class="lede">Skyline Pulse is a lightweight weekly ledger for worship and production teams — attendance, unity, engagement, room experience, service flow, and tech readiness, logged in under a minute and pulled straight from your Planning Center Plans.</p>
     <div class="hero-cta">
       <a class="btn btn-primary" href="https://skylinechurchpulse.pages.dev">Open the App ↗</a>
       <a class="btn btn-secondary" href="https://github.com/bstef/skylinechurchpulse">View Source</a>
@@ -148,28 +148,13 @@
     <div class="section-head">
       <div class="kicker">Why it exists</div>
       <h2 class="display">One place for the numbers that used to live in someone's head</h2>
-      <p>No more digging through texts and spreadsheets to remember how loud 11:00 ran, or who filled in the details for a given Sunday. Pulse makes it a 60-second habit.</p>
+      <p>No more digging through texts and spreadsheets to remember how loud 11:00 ran, who was running camera, or who filled in the details for a given Sunday. Pulse makes it a 60-second habit.</p>
     </div>
     <div class="feature-grid">
       <div class="feature-card">
         <div class="feature-icon">📋</div>
-        <h3>Weekly Ledger</h3>
+        <h3>Services Ledger</h3>
         <p>Attendance, worship unity, audience engagement, and loudness (dB) for every service, filterable by service type.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🗓️</div>
-        <h3>Calendar &amp; Day View</h3>
-        <p>See exactly what's logged and what's still needed for any Sunday, at a glance — month grid or a focused day agenda.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🔊</div>
-        <h3>Room Experience</h3>
-        <p>Sound clarity in the back of the room, spiritual response 2/3 back, and how clearly transitions landed — the stuff that's easy to feel and hard to remember.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🎬</div>
-        <h3>Service Flow</h3>
-        <p>Did lighting fit the song? Did the talking segments, announcements, and sermon land the way they were planned? Track it every week.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">🔗</div>
@@ -177,9 +162,39 @@
         <p>Plans pull automatically from your Services Service Types — including sermon artwork and split 9:30/11:00 service times — so nothing's typed twice.</p>
       </div>
       <div class="feature-card">
+        <div class="feature-icon">🎧</div>
+        <h3>SkyYouth, on its own tab</h3>
+        <p>SkyYouth gets its own Planning Center feed, ledger, and analytics — pulled from its own Service Type, never mixed in with Sunday morning.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎛️</div>
+        <h3>Production Tracking</h3>
+        <p>Role attendance for lights, camera, director, computer/ProPresenter, and audio, plus slide-sync and camera-direction fit checks — a running record for the tech team.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🗓️</div>
+        <h3>Calendar &amp; Day View</h3>
+        <p>See exactly what's logged and what's still needed for any Sunday, at a glance — month grid or a focused day agenda.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">✍️</div>
+        <h3>Who Logged It</h3>
+        <p>A lightweight "Logged by" field, autocompleted from names used before — attribution without a login wall.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔊</div>
+        <h3>Room Experience &amp; Service Flow</h3>
+        <p>Sound clarity, spiritual response 2/3 back, transition clarity, and whether lighting, talking, announcements, and the sermon landed as planned.</p>
+      </div>
+      <div class="feature-card">
         <div class="feature-icon">📈</div>
-        <h3>Analytics</h3>
-        <p>Trends across every measurement, plus a breakdown of who's been logging services, so the data stays honest and current.</p>
+        <h3>Three Analytics Views</h3>
+        <p>Services, Production, and SkyYouth each get their own trend charts and a "who's logging" breakdown, so the numbers stay honest and current.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⬇️</div>
+        <h3>CSV, PDF &amp; Print</h3>
+        <p>Every ledger exports to CSV or a formatted PDF table; every analytics view prints straight to a shareable PDF report.</p>
       </div>
     </div>
   </div>
@@ -201,7 +216,7 @@
           <p>Pulse reads directly from your Planning Center Services Service Types — pulling every Plan in a rolling window, matching it to a Pulse service type, and showing sermon artwork when it's attached.</p>
           <ul>
             <li>Splits multi-service Plans (like a 9:30/11:00 Celebration Service) into separate rows automatically</li>
-            <li>Filter by service type — Celebration, SkyYouth, Worship Night, and more</li>
+            <li>SkyYouth pulls from its own Service Type into its own tab, never mixed in with Sunday morning</li>
             <li>"Needs details" vs. "Logged ✓" status at a glance</li>
           </ul>
         </div>
@@ -209,6 +224,20 @@
       </div>
 
       <div class="showcase-row reverse">
+        <div class="showcase-text">
+          <div class="kicker">Production</div>
+          <h3 class="display">A running record for the tech team</h3>
+          <p>Its own tab, its own ledger, its own analytics — role attendance for lights, camera, director, computer/ProPresenter, and audio, plus whether slides stayed in sync with worship and camera direction was on point.</p>
+          <ul>
+            <li>Who was on each role, not just whether the slot was covered</li>
+            <li>Built to grow — more fields land as the team defines them, no schema rewrite</li>
+            <li>Its own "Production Analytics" tab and Exports card</li>
+          </ul>
+        </div>
+        <div class="showcase-img"><img src="images/production-light.png" alt="Production tab showing role attendance and fit checks per service"></div>
+      </div>
+
+      <div class="showcase-row">
         <div class="showcase-text">
           <div class="kicker">Calendar</div>
           <h3 class="display">Month or day, your call</h3>
@@ -222,7 +251,7 @@
         <div class="showcase-img"><img src="images/calendar-month-dark.png" alt="Calendar month view in dark theme showing logged services across June"></div>
       </div>
 
-      <div class="showcase-row">
+      <div class="showcase-row reverse">
         <div class="showcase-text">
           <div class="kicker">Logging a Service</div>
           <h3 class="display">Every measurement that matters, one form</h3>
@@ -236,18 +265,32 @@
         <div class="showcase-img"><img src="images/log-modal-light.png" alt="Log a Service modal with attendance, unity, engagement, room experience, and service flow fields"></div>
       </div>
 
-      <div class="showcase-row reverse">
+      <div class="showcase-row">
         <div class="showcase-text">
           <div class="kicker">Analytics</div>
-          <h3 class="display">Trends, not just data entry</h3>
-          <p>Every measurement charted over time — attendance, unity, engagement, spiritual response, service flow — plus a breakdown of who's been logging, so the numbers stay accountable.</p>
+          <h3 class="display">Three views, not one dashboard</h3>
+          <p>Services, Production, and SkyYouth each get their own tab under Analytics — every measurement charted over time, plus a breakdown of who's been logging, so the numbers stay accountable.</p>
           <ul>
-            <li>Rolling 8-service trend charts</li>
-            <li>Service-flow "% landed well" summary</li>
-            <li>CSV export for the whole ledger</li>
+            <li>Rolling 8-service trend charts per view</li>
+            <li>Service-flow / fit-check "% landed well" summaries</li>
+            <li>SkyYouth analytics stay separate from the main Sunday numbers</li>
           </ul>
         </div>
-        <div class="showcase-img"><img src="images/analytics-light.png" alt="Analytics tab with attendance, unity/engagement, and spiritual response charts"></div>
+        <div class="showcase-img"><img src="images/analytics-light.png" alt="Services Analytics tab with attendance, unity/engagement, and spiritual response charts"></div>
+      </div>
+
+      <div class="showcase-row reverse">
+        <div class="showcase-text">
+          <div class="kicker">Exports</div>
+          <h3 class="display">CSV, PDF, or a print-ready report</h3>
+          <p>A dedicated Exports page with a card per dataset — Services, Production, SkyYouth — each offering a CSV download, a formatted PDF table, and a one-click print of that dataset's Analytics report.</p>
+          <ul>
+            <li>CSV and PDF table exports mirror each other, pick whichever format the meeting needs</li>
+            <li>"Print report" jumps to the live charts and opens your browser's print-to-PDF dialog</li>
+            <li>Buttons disable themselves automatically when there's nothing to export yet</li>
+          </ul>
+        </div>
+        <div class="showcase-img"><img src="images/exports-light.png" alt="Exports page with Services, Production, and SkyYouth cards offering CSV, PDF, and print report actions"></div>
       </div>
     </div>
   </div>
@@ -300,6 +343,10 @@
       <div class="stack-item">
         <div class="name display">Chart.js</div>
         <p>Every analytics chart, themed live from the same CSS custom properties as the app.</p>
+      </div>
+      <div class="stack-item">
+        <div class="name display">jsPDF</div>
+        <p>Tabular PDF exports for the client; report-style PDFs use the browser's own print-to-PDF instead of a library.</p>
       </div>
     </div>
   </div>
