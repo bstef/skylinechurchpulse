@@ -120,6 +120,15 @@
   .field{display:flex;flex-direction:column;gap:6px;min-width:0;}
   .field span{font-size:13px;font-weight:600;color:var(--field-label);}
   .field-section-label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--brass);font-weight:700;border-top:1px solid var(--line);padding-top:14px;}
+  .role-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);}
+  .role-row select{width:auto;flex-shrink:0;}
+  .role-name{flex:0 0 150px;font-size:14px;font-weight:600;color:var(--field-label);}
+  .role-person{flex:1;min-width:0;}
+  @media (max-width:640px){
+    .role-row{flex-wrap:wrap;}
+    .role-name{flex:1 0 100%;}
+    .role-person{flex:1 1 auto;}
+  }
   .service-locked{display:flex;align-items:center;min-height:41px;}
   .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:var(--ink);color:var(--paper);border-radius:6px;padding:14px 18px;display:flex;align-items:center;gap:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:60;font-size:14px;}
   .toast button{background:none;border:1px solid var(--paper);color:var(--paper);border-radius:4px;padding:6px 12px;font-size:13px;font-weight:700;}
@@ -222,6 +231,7 @@
       <button id="tab-pco" class="active">Planning Center</button>
       <button id="tab-calendar">Calendar</button>
       <button id="tab-log">Ledger</button>
+      <button id="tab-production">Production</button>
       <button id="tab-analytics">Analytics</button>
     </nav>
     <svg class="hero-banner" viewBox="0 0 1000 60" preserveAspectRatio="none" aria-hidden="true">
@@ -281,8 +291,20 @@ const PCO_SERVICE_TYPE_ALIASES = {
   "Special Event": ["special event"],
 };
 
+/* Production/tech roles tracked per service. Add a row here (and a matching
+   set of `<key>_present`/`<key>_name` columns in db/schema.sql) to track a
+   new role — the modal form and list view are both generated from this. */
+const PRODUCTION_ROLES = [
+  { key: "lights", label: "Lights" },
+  { key: "camera", label: "Camera" },
+  { key: "director", label: "Director" },
+  { key: "computer", label: "Computer / ProPresenter" },
+  { key: "audio", label: "Audio" },
+];
+
 let sb = null;
 let entries = [];
+let productionEntries = [];
 let view = "pco";
 let charts = [];
 let filterType = "All";
@@ -444,6 +466,36 @@ async function updateEntry(id, payload) {
   return true;
 }
 
+async function loadProductionEntries() {
+  if (!configured()) return;
+  const { data, error } = await sb.from("production_entries").select("*").order("service_date", { ascending: false });
+  if (error) { showError("Couldn't load production entries: " + error.message); return; }
+  productionEntries = data;
+  render();
+}
+
+async function addProductionEntry(payload) {
+  const { error } = await sb.from("production_entries").insert([payload]);
+  if (error) { showError("Couldn't save: " + error.message); return false; }
+  showError("");
+  await loadProductionEntries();
+  return true;
+}
+
+async function updateProductionEntry(id, payload) {
+  const { error } = await sb.from("production_entries").update(payload).eq("id", id);
+  if (error) { showError("Couldn't save: " + error.message); return false; }
+  showError("");
+  await loadProductionEntries();
+  return true;
+}
+
+async function removeProductionEntry(id) {
+  const { error } = await sb.from("production_entries").delete().eq("id", id);
+  if (error) { showError("Couldn't delete: " + error.message); return; }
+  await loadProductionEntries();
+}
+
 function destroyCharts() { charts.forEach(c => c.destroy()); charts = []; }
 
 function render() {
@@ -452,6 +504,7 @@ function render() {
   document.getElementById("tab-calendar").classList.toggle("active", view === "calendar");
   document.getElementById("tab-analytics").classList.toggle("active", view === "analytics");
   document.getElementById("tab-pco").classList.toggle("active", view === "pco");
+  document.getElementById("tab-production").classList.toggle("active", view === "production");
   document.getElementById("export-btn").disabled = entries.length === 0;
   destroyCharts();
 
@@ -541,6 +594,19 @@ function render() {
     return;
   }
 
+  if (view === "production") {
+    content.innerHTML = renderProduction();
+    const addBtn = document.getElementById("production-add-btn");
+    if (addBtn) addBtn.addEventListener("click", () => openProductionModal());
+    content.querySelectorAll(".prod-row").forEach(row => {
+      row.addEventListener("click", () => openProductionModal(productionEntries.find(en => en.id === row.dataset.id)));
+    });
+    content.querySelectorAll(".prod-del-btn").forEach(btn => {
+      btn.addEventListener("click", (e) => { e.stopPropagation(); removeProductionEntry(btn.dataset.id); });
+    });
+    return;
+  }
+
   if (entries.length === 0) {
     content.innerHTML = `<div class="empty">
       <div class="display">The ledger is empty.</div>
@@ -600,6 +666,43 @@ function renderLog() {
     </tr>`).join("");
   return `${filterRow}<div class="table-scroll"><table>
     <thead><tr><th>Date</th><th>Service</th><th class="num">Attend.</th><th class="num">Unity</th><th class="num">Engage.</th><th class="num">dB</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function renderProduction() {
+  const header = `<div class="pco-header">
+    <div>
+      <h3 class="display" style="margin:0 0 4px;">Production</h3>
+      <div style="color:var(--muted);font-size:13px;">Role attendance and tech requirements for each service. More fields coming as the team defines them.</div>
+    </div>
+    <button class="btn-primary" id="production-add-btn">+ Log Production</button>
+  </div>`;
+
+  if (productionEntries.length === 0) {
+    return `${header}<div class="empty">
+      <div class="display">Nothing logged yet.</div>
+      <div>Log role attendance and tech notes for a service to start tracking.</div>
+    </div>`;
+  }
+
+  const rows = productionEntries.map(e => {
+    const presentCount = PRODUCTION_ROLES.filter(r => e[`${r.key}_present`]).length;
+    return `
+    <tr class="prod-row" data-id="${e.id}">
+      <td>${fmtDate(e.service_date)}</td>
+      <td><span class="service-badge ${badgeClass(e.service_type)}">${escapeHtml(e.service_type)}</span></td>
+      <td class="num">${presentCount}/${PRODUCTION_ROLES.length}</td>
+      <td>${e.slides_sync_fit ? "✓" : "✕"} Slides &nbsp; ${e.camera_direction_fit ? "✓" : "✕"} Camera</td>
+      <td>${e.logged_by ? escapeHtml(e.logged_by) : "—"}</td>
+      <td class="actions-cell">
+        <button class="icon-btn prod-del-btn" data-id="${e.id}" title="Delete">✕</button>
+      </td>
+    </tr>`;
+  }).join("");
+
+  return `${header}<div class="table-scroll"><table>
+    <thead><tr><th>Date</th><th>Service</th><th class="num">Roles Present</th><th>Fit Checks</th><th>Logged By</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
@@ -1160,11 +1263,99 @@ function openModal(entry, pcoPlan) {
 }
 function closeModal() { document.getElementById("modal-slot").innerHTML = ""; }
 
+function openProductionModal(entry) {
+  const editing = !!entry;
+  const today = new Date().toISOString().slice(0,10);
+  const v = {
+    date: entry ? entry.service_date : today,
+    service: entry ? entry.service_type : "",
+    slidesSync: entry ? entry.slides_sync_fit : true,
+    cameraDirection: entry ? entry.camera_direction_fit : true,
+    notes: entry ? (entry.notes || "") : "",
+    loggedBy: entry ? (entry.logged_by || "") : (localStorage.getItem("skyline-logged-by") || ""),
+  };
+  const loggedByNames = [...new Set([...entries, ...productionEntries].map(e => e.logged_by).filter(Boolean))].sort();
+  const roleNames = (key) => [...new Set(productionEntries.map(e => e[`${key}_name`]).filter(Boolean))].sort();
+
+  document.getElementById("modal-slot").innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal">
+        <div class="modal-head"><h2 class="display">${editing ? "Edit Production Log" : "Log Production"}</h2><button class="close-x" id="modal-close">✕</button></div>
+        <div class="modal-body">
+          <div class="row2">
+            <label class="field" style="flex:1"><span>Date</span><input type="date" id="pf-date" value="${v.date}" max="${today}"></label>
+            <label class="field" style="flex:1"><span>Service *</span>
+              <select id="pf-service" required>
+                <option value="" ${v.service?"":"selected"} disabled>Select a service…</option>
+                ${SERVICE_TYPES.map(s=>`<option value="${s}" ${s===v.service?"selected":""}>${s}</option>`).join("")}
+              </select>
+            </label>
+          </div>
+
+          <div class="field-section-label">Role Attendance</div>
+          ${PRODUCTION_ROLES.map(r => {
+            const present = entry ? entry[`${r.key}_present`] : true;
+            const name = entry ? (entry[`${r.key}_name`] || "") : "";
+            return `
+            <div class="role-row">
+              <div class="role-name">${escapeHtml(r.label)}</div>
+              ${yesNoSelect(`pf-role-${r.key}-present`, present)}
+              <input type="text" class="role-person" id="pf-role-${r.key}-name" list="role-${r.key}-list" placeholder="Who?" value="${escapeHtml(name)}" autocomplete="off">
+              <datalist id="role-${r.key}-list">${roleNames(r.key).map(n=>`<option value="${escapeHtml(n)}">`).join("")}</datalist>
+            </div>`;
+          }).join("")}
+
+          <div class="field-section-label">Fit Checks</div>
+          <div class="row2">
+            <label class="field" style="flex:1"><span>Slides kept pace with worship</span>${yesNoSelect("pf-slides", v.slidesSync)}</label>
+            <label class="field" style="flex:1"><span>Camera work/direction was on point</span>${yesNoSelect("pf-camera-direction", v.cameraDirection)}</label>
+          </div>
+
+          <label class="field"><span>Notes (optional)</span><textarea rows="2" id="pf-notes" placeholder="Anything else worth noting — more structured fields coming soon…">${escapeHtml(v.notes)}</textarea></label>
+          <label class="field"><span>Logged by *</span>
+            <input type="text" id="pf-logged-by" list="production-logged-by-list" placeholder="Your name" value="${escapeHtml(v.loggedBy)}" autocomplete="off">
+            <datalist id="production-logged-by-list">${loggedByNames.map(n=>`<option value="${escapeHtml(n)}">`).join("")}</datalist>
+          </label>
+          <button class="save-btn" id="pf-save">${editing ? "Update Log" : "Save Log"}</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById("modal-close").addEventListener("click", closeModal);
+  document.getElementById("modal-backdrop").addEventListener("click", (e) => { if (e.target.id === "modal-backdrop") closeModal(); });
+  document.getElementById("pf-save").addEventListener("click", async () => {
+    const serviceType = document.getElementById("pf-service").value;
+    const serviceDate = document.getElementById("pf-date").value;
+    const loggedBy = document.getElementById("pf-logged-by").value.trim();
+    if (!serviceType) { showError("Please select a service."); return; }
+    if (!loggedBy) { showError("Please enter your name so we know who logged this."); return; }
+    if (serviceDate > today) { showError("Can't log details for a service that hasn't happened yet."); return; }
+    const payload = {
+      service_date: serviceDate,
+      service_type: serviceType,
+      notes: document.getElementById("pf-notes").value.trim(),
+      slides_sync_fit: document.getElementById("pf-slides").value === "yes",
+      camera_direction_fit: document.getElementById("pf-camera-direction").value === "yes",
+      logged_by: loggedBy,
+    };
+    PRODUCTION_ROLES.forEach(r => {
+      payload[`${r.key}_present`] = document.getElementById(`pf-role-${r.key}-present`).value === "yes";
+      payload[`${r.key}_name`] = document.getElementById(`pf-role-${r.key}-name`).value.trim();
+    });
+    const ok = editing ? await updateProductionEntry(entry.id, payload) : await addProductionEntry(payload);
+    if (ok) {
+      localStorage.setItem("skyline-logged-by", loggedBy);
+      closeModal();
+    }
+  });
+}
+
 document.getElementById("open-form-btn").addEventListener("click", () => openModal());
 document.getElementById("tab-log").addEventListener("click", () => { view = "log"; render(); });
 document.getElementById("tab-calendar").addEventListener("click", () => { view = "calendar"; render(); });
 document.getElementById("tab-analytics").addEventListener("click", () => { view = "analytics"; render(); });
 document.getElementById("tab-pco").addEventListener("click", () => { view = "pco"; render(); });
+document.getElementById("tab-production").addEventListener("click", () => { view = "production"; render(); });
 document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
 document.getElementById("export-btn").addEventListener("click", exportCSV);
 document.getElementById("footer-year").textContent = new Date().getFullYear();
@@ -1175,6 +1366,7 @@ if (configured()) {
   sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   loadEntries();
   loadPcoPlans();
+  loadProductionEntries();
 } else {
   render();
 }

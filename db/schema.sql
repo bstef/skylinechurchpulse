@@ -99,3 +99,49 @@ create policy "Allow anon update" on public.service_entries
 drop policy if exists "Allow anon delete" on public.service_entries;
 create policy "Allow anon delete" on public.service_entries
   for delete using (true);
+
+-- Production/tech team requirements for the day — a separate table from
+-- service_entries since it's typically filled in by a different person
+-- (production lead vs. worship/ops) and its fields are still being defined.
+-- Start with role attendance (lights/camera/director/computer/audio) plus a
+-- couple of best-effort fit checks; expect more columns via `alter table add
+-- column if not exists` as requirements firm up.
+create table if not exists public.production_entries (
+  id uuid primary key default gen_random_uuid(),
+  service_date date not null,
+  service_type text not null,
+  lights_present boolean not null default true,
+  lights_name text,
+  camera_present boolean not null default true,
+  camera_name text,
+  director_present boolean not null default true,
+  director_name text,
+  computer_present boolean not null default true,
+  computer_name text,
+  audio_present boolean not null default true,
+  audio_name text,
+  slides_sync_fit boolean not null default true,
+  camera_direction_fit boolean not null default true,
+  notes text default '',
+  logged_by text,
+  created_at timestamptz not null default now(),
+  unique (service_date, service_type)
+);
+
+alter table public.production_entries enable row level security;
+
+drop policy if exists "Allow anon read" on public.production_entries;
+create policy "Allow anon read" on public.production_entries
+  for select using (true);
+
+drop policy if exists "Allow anon insert" on public.production_entries;
+create policy "Allow anon insert" on public.production_entries
+  for insert with check (true);
+
+drop policy if exists "Allow anon update" on public.production_entries;
+create policy "Allow anon update" on public.production_entries
+  for update using (true) with check (true);
+
+drop policy if exists "Allow anon delete" on public.production_entries;
+create policy "Allow anon delete" on public.production_entries
+  for delete using (true);
