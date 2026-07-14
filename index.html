@@ -229,6 +229,7 @@
     </div>
     <nav>
       <button id="tab-pco" class="active">Planning Center</button>
+      <button id="tab-skyyouth">SkyYouth</button>
       <button id="tab-calendar">Calendar</button>
       <button id="tab-log">Ledger</button>
       <button id="tab-production">Production</button>
@@ -313,6 +314,7 @@ let pcoError = null;
 let pcoLoaded = false;
 let pcoLoading = false;
 let pcoFilterTypes = new Set();
+let skyYouthFilterTypes = new Set();
 let calendarMonth = null;
 let calendarView = "day";
 let calendarDay = null;
@@ -361,6 +363,14 @@ function guessServiceType(pcoName) {
     if (aliases.some(a => n.includes(norm(a)))) return s;
   }
   return "";
+}
+
+// SkyYouth gets its own tab, so the main Planning Center tab and the
+// SkyYouth tab split the same `pcoPlans` list by the plan's underlying PCO
+// Service Type folder (not the split-out plan_time_name, which only exists
+// for multi-time folders like Celebration Service).
+function isSkyYouthPlan(p) {
+  return guessServiceType(p.service_type_name) === "SkyYouth";
 }
 
 function yesNoSelect(id, value) {
@@ -504,6 +514,7 @@ function render() {
   document.getElementById("tab-calendar").classList.toggle("active", view === "calendar");
   document.getElementById("tab-analytics").classList.toggle("active", view === "analytics");
   document.getElementById("tab-pco").classList.toggle("active", view === "pco");
+  document.getElementById("tab-skyyouth").classList.toggle("active", view === "skyyouth");
   document.getElementById("tab-production").classList.toggle("active", view === "production");
   document.getElementById("export-btn").disabled = entries.length === 0;
   destroyCharts();
@@ -520,26 +531,14 @@ function render() {
 
   if (view === "pco") {
     content.innerHTML = renderPco();
-    const refreshBtn = document.getElementById("pco-refresh");
-    if (refreshBtn) refreshBtn.addEventListener("click", () => loadPcoPlans(true));
-    content.querySelectorAll(".pco-log-btn").forEach(btn => {
-      btn.addEventListener("click", () => openModal(null, pcoPlans.find(p => p.id === btn.dataset.id)));
-    });
-    content.querySelectorAll(".pco-view-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const entry = entries.find(e => e.id === btn.dataset.id);
-        if (entry) openDetail(entry);
-      });
-    });
-    content.querySelectorAll(".filter-chip").forEach(chip => {
-      chip.addEventListener("click", () => {
-        const val = chip.dataset.filter;
-        if (val === "All") pcoFilterTypes.clear();
-        else if (pcoFilterTypes.has(val)) pcoFilterTypes.delete(val);
-        else pcoFilterTypes.add(val);
-        render();
-      });
-    });
+    wirePcoTabHandlers(content, pcoFilterTypes);
+    if (!pcoLoaded) loadPcoPlans();
+    return;
+  }
+
+  if (view === "skyyouth") {
+    content.innerHTML = renderSkyYouth();
+    wirePcoTabHandlers(content, skyYouthFilterTypes);
     if (!pcoLoaded) loadPcoPlans();
     return;
   }
@@ -885,11 +884,11 @@ async function loadPcoPlans(force) {
   render();
 }
 
-function renderPco() {
+function renderPcoSection(plans, filterState, opts) {
   const header = `<div class="pco-header">
     <div>
-      <h3 class="display" style="margin:0 0 4px;">Planning Center — Plans</h3>
-      <div style="color:var(--muted);font-size:13px;">Pulled live from your Services Service Types. Log Pulse details for any plan below.</div>
+      <h3 class="display" style="margin:0 0 4px;">${opts.title}</h3>
+      <div style="color:var(--muted);font-size:13px;">${opts.subtitle}</div>
     </div>
     <button class="btn-secondary" id="pco-refresh" ${pcoLoading ? "disabled" : ""}>${pcoLoading ? "↻ Refreshing…" : "↻ Refresh"}</button>
   </div>`;
@@ -900,30 +899,30 @@ function renderPco() {
   if (pcoError) {
     return `${header}<div class="error-banner">${escapeHtml(pcoError)}</div>`;
   }
-  if (pcoPlans.length === 0) {
+  if (plans.length === 0) {
     return `${header}<div class="empty">
-      <div class="display">No plans found.</div>
-      <div>Nothing scheduled in the last 14 days or next 45 days across your Service Types.</div>
+      <div class="display">${opts.emptyTitle}</div>
+      <div>${opts.emptyBody}</div>
     </div>`;
   }
 
   const pcoRowLabel = p => guessServiceType(p.plan_time_name || p.service_type_name) || p.service_type_name;
 
-  const typesPresent = [...new Set(pcoPlans.map(pcoRowLabel))].sort();
-  const filterRow = `<div class="filter-row">
-    <button class="filter-chip ${pcoFilterTypes.size === 0 ? "all-active" : ""}" data-filter="All">All (${pcoPlans.length})</button>
+  const typesPresent = [...new Set(plans.map(pcoRowLabel))].sort();
+  const filterRow = typesPresent.length <= 1 ? "" : `<div class="filter-row">
+    <button class="filter-chip ${filterState.size === 0 ? "all-active" : ""}" data-filter="All">All (${plans.length})</button>
     ${typesPresent.map(label => {
       const matched = SERVICE_TYPES.includes(label) ? label : "";
       const cls = matched ? badgeClass(matched) : "badge-unmatched";
-      const count = pcoPlans.filter(p => pcoRowLabel(p) === label).length;
-      return `<button class="filter-chip ${cls} ${pcoFilterTypes.has(label) ? "active" : ""}" data-filter="${escapeHtml(label)}">${escapeHtml(label)} (${count})</button>`;
+      const count = plans.filter(p => pcoRowLabel(p) === label).length;
+      return `<button class="filter-chip ${cls} ${filterState.has(label) ? "active" : ""}" data-filter="${escapeHtml(label)}">${escapeHtml(label)} (${count})</button>`;
     }).join("")}
   </div>`;
 
-  const filteredPlans = pcoFilterTypes.size === 0 ? pcoPlans : pcoPlans.filter(p => pcoFilterTypes.has(pcoRowLabel(p)));
+  const filteredPlans = filterState.size === 0 ? plans : plans.filter(p => filterState.has(pcoRowLabel(p)));
 
   if (filteredPlans.length === 0) {
-    return `${header}${filterRow}<div class="filter-empty">No plans for ${[...pcoFilterTypes].map(escapeHtml).join(", ")}.</div>`;
+    return `${header}${filterRow}<div class="filter-empty">No plans for ${[...filterState].map(escapeHtml).join(", ")}.</div>`;
   }
 
   const entriesByPlan = {};
@@ -967,6 +966,47 @@ function renderPco() {
     <thead><tr><th>Date</th><th>Plan</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
+}
+
+function renderPco() {
+  return renderPcoSection(pcoPlans.filter(p => !isSkyYouthPlan(p)), pcoFilterTypes, {
+    title: "Planning Center — Plans",
+    subtitle: "Pulled live from your Services Service Types. Log Pulse details for any plan below.",
+    emptyTitle: "No plans found.",
+    emptyBody: "Nothing scheduled in the last 14 days or next 45 days across your Service Types.",
+  });
+}
+
+function renderSkyYouth() {
+  return renderPcoSection(pcoPlans.filter(isSkyYouthPlan), skyYouthFilterTypes, {
+    title: "SkyYouth — Plans",
+    subtitle: "Pulled live from your SkyYouth Service Type. Log Pulse details for any plan below.",
+    emptyTitle: "No SkyYouth plans found.",
+    emptyBody: "Nothing scheduled for SkyYouth in the last 14 days or next 45 days.",
+  });
+}
+
+function wirePcoTabHandlers(content, filterState) {
+  const refreshBtn = document.getElementById("pco-refresh");
+  if (refreshBtn) refreshBtn.addEventListener("click", () => loadPcoPlans(true));
+  content.querySelectorAll(".pco-log-btn").forEach(btn => {
+    btn.addEventListener("click", () => openModal(null, pcoPlans.find(p => p.id === btn.dataset.id)));
+  });
+  content.querySelectorAll(".pco-view-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const entry = entries.find(e => e.id === btn.dataset.id);
+      if (entry) openDetail(entry);
+    });
+  });
+  content.querySelectorAll(".filter-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const val = chip.dataset.filter;
+      if (val === "All") filterState.clear();
+      else if (filterState.has(val)) filterState.delete(val);
+      else filterState.add(val);
+      render();
+    });
+  });
 }
 
 function renderCalendar() {
@@ -1355,6 +1395,7 @@ document.getElementById("tab-log").addEventListener("click", () => { view = "log
 document.getElementById("tab-calendar").addEventListener("click", () => { view = "calendar"; render(); });
 document.getElementById("tab-analytics").addEventListener("click", () => { view = "analytics"; render(); });
 document.getElementById("tab-pco").addEventListener("click", () => { view = "pco"; render(); });
+document.getElementById("tab-skyyouth").addEventListener("click", () => { view = "skyyouth"; render(); });
 document.getElementById("tab-production").addEventListener("click", () => { view = "production"; render(); });
 document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
 document.getElementById("export-btn").addEventListener("click", exportCSV);

@@ -27,6 +27,7 @@ const EXCLUDED_SERVICE_TYPES = [
   "Assimilation",
   "First Impressions Teams Service Plan",
   "Childcare Services",
+  "Facilities/Resources",
 ];
 
 // Only these Service Type folders get expanded into one row per PlanTime.
