@@ -51,9 +51,13 @@
   .theme-toggle,.btn-primary,.btn-secondary{height:44px;border-radius:6px;}
   .theme-toggle{width:44px;}
   .btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--pew);color:var(--paper);border:none;padding:0 20px;font-size:15px;font-weight:600;box-shadow:0 2px 0 rgba(0,0,0,.15);white-space:nowrap;}
-  nav{display:flex;gap:4px;margin-top:24px;overflow-x:auto;}
+  .page-toggle{display:flex;gap:6px;margin-top:24px;}
+  .page-toggle-btn{border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:8px 20px;font-size:13px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;border-radius:20px;}
+  .page-toggle-btn.active{background:var(--brass);color:var(--paper);border-color:var(--brass);}
+  nav{display:flex;gap:4px;margin-top:14px;overflow-x:auto;}
   nav button{padding:9px 18px;border:none;background:transparent;color:var(--ink);font-size:14px;font-weight:600;border-radius:3px 3px 0 0;white-space:nowrap;flex-shrink:0;}
   nav button.active{background:var(--ink);color:var(--paper);}
+  nav button.page-hidden{display:none;}
   main{max-width:1080px;margin:0 auto;padding:32px 24px 80px;}
   .table-scroll{overflow-x:auto;}
   @media (max-width: 640px){
@@ -239,14 +243,18 @@
         <button class="btn-primary" id="open-form-btn">+ Log a Service</button>
       </div>
     </div>
+    <div class="page-toggle">
+      <button class="page-toggle-btn active" id="page-logging">Logging</button>
+      <button class="page-toggle-btn" id="page-analytics">Analytics</button>
+    </div>
     <nav>
       <button id="tab-pco" class="active">Planning Center</button>
       <button id="tab-production">Production</button>
-      <button id="tab-production-analytics">Production Analytics</button>
       <button id="tab-skyyouth">SkyYouth</button>
       <button id="tab-calendar">Calendar</button>
       <button id="tab-log">Services</button>
-      <button id="tab-analytics">Analytics</button>
+      <button id="tab-analytics">Services Analytics</button>
+      <button id="tab-production-analytics">Production Analytics</button>
     </nav>
     <svg class="hero-banner" viewBox="0 0 1000 60" preserveAspectRatio="none" aria-hidden="true">
       <path class="hero-skyline" d="M0,60 L0,48 L18,48 L18,40 L34,40 L34,52 L54,52 L54,26 L70,26 L70,44 L92,44 L92,16 L112,16 L112,44 L132,44 L132,35 L152,35 L152,50 L178,50 L178,20 L198,20 L198,50 L1000,50 L1000,60 Z"></path>
@@ -316,10 +324,16 @@ const PRODUCTION_ROLES = [
   { key: "audio", label: "Audio" },
 ];
 
+const LOGGING_VIEWS = ["pco", "production", "skyyouth", "calendar", "log"];
+const ANALYTICS_VIEWS = ["analytics", "production-analytics"];
+
 let sb = null;
 let entries = [];
 let productionEntries = [];
 let view = "pco";
+let page = "logging";
+let lastLoggingView = "pco";
+let lastAnalyticsView = "analytics";
 let charts = [];
 let filterType = "All";
 let pcoPlans = [];
@@ -545,6 +559,13 @@ function handlePdfClick() {
   else if (view === "analytics" || view === "production-analytics") window.print();
 }
 
+function setView(v) {
+  view = v;
+  if (LOGGING_VIEWS.includes(v)) { page = "logging"; lastLoggingView = v; }
+  else if (ANALYTICS_VIEWS.includes(v)) { page = "analytics"; lastAnalyticsView = v; }
+  render();
+}
+
 function render() {
   const content = document.getElementById("content");
   document.getElementById("tab-log").classList.toggle("active", view === "log");
@@ -554,6 +575,10 @@ function render() {
   document.getElementById("tab-skyyouth").classList.toggle("active", view === "skyyouth");
   document.getElementById("tab-production").classList.toggle("active", view === "production");
   document.getElementById("tab-production-analytics").classList.toggle("active", view === "production-analytics");
+  document.getElementById("page-logging").classList.toggle("active", page === "logging");
+  document.getElementById("page-analytics").classList.toggle("active", page === "analytics");
+  LOGGING_VIEWS.forEach(v => document.getElementById(`tab-${v}`).classList.toggle("page-hidden", page !== "logging"));
+  ANALYTICS_VIEWS.forEach(v => document.getElementById(`tab-${v}`).classList.toggle("page-hidden", page !== "analytics"));
   document.getElementById("export-btn").disabled = entries.length === 0;
   updatePdfButton();
   destroyCharts();
@@ -1550,13 +1575,15 @@ function openProductionModal(entry) {
 }
 
 document.getElementById("open-form-btn").addEventListener("click", () => openModal());
-document.getElementById("tab-log").addEventListener("click", () => { view = "log"; render(); });
-document.getElementById("tab-calendar").addEventListener("click", () => { view = "calendar"; render(); });
-document.getElementById("tab-analytics").addEventListener("click", () => { view = "analytics"; render(); });
-document.getElementById("tab-pco").addEventListener("click", () => { view = "pco"; render(); });
-document.getElementById("tab-skyyouth").addEventListener("click", () => { view = "skyyouth"; render(); });
-document.getElementById("tab-production").addEventListener("click", () => { view = "production"; render(); });
-document.getElementById("tab-production-analytics").addEventListener("click", () => { view = "production-analytics"; render(); });
+document.getElementById("tab-log").addEventListener("click", () => setView("log"));
+document.getElementById("tab-calendar").addEventListener("click", () => setView("calendar"));
+document.getElementById("tab-analytics").addEventListener("click", () => setView("analytics"));
+document.getElementById("tab-pco").addEventListener("click", () => setView("pco"));
+document.getElementById("tab-skyyouth").addEventListener("click", () => setView("skyyouth"));
+document.getElementById("tab-production").addEventListener("click", () => setView("production"));
+document.getElementById("tab-production-analytics").addEventListener("click", () => setView("production-analytics"));
+document.getElementById("page-logging").addEventListener("click", () => setView(lastLoggingView));
+document.getElementById("page-analytics").addEventListener("click", () => setView(lastAnalyticsView));
 document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
 document.getElementById("export-btn").addEventListener("click", exportCSV);
 document.getElementById("pdf-btn").addEventListener("click", handlePdfClick);
