@@ -1482,10 +1482,11 @@ function openModal(entry, pcoPlan) {
   const today = new Date().toISOString().slice(0,10);
   const pcoMatchedService = (!editing && pcoPlan) ? guessServiceType(pcoPlan.plan_time_name || pcoPlan.service_type_name) : "";
   const serviceLocked = !!pcoMatchedService;
+  const attendanceFromPco = !editing && pcoPlan && pcoPlan.pco_attendance != null;
   const v = {
     date: entry ? entry.service_date : (pcoPlan ? pcoPlan.sort_date.slice(0,10) : today),
     service: entry ? entry.service_type : pcoMatchedService,
-    attendance: entry ? entry.attendance : "",
+    attendance: entry ? entry.attendance : (attendanceFromPco ? pcoPlan.pco_attendance : ""),
     unity: entry ? entry.unity : 3,
     engagement: entry ? entry.engagement : 3,
     loudness: entry ? entry.loudness_db : "",
@@ -1527,6 +1528,7 @@ function openModal(entry, pcoPlan) {
             `}
           </div>
           <label class="field"><span>Attendance (headcount)</span><input type="number" min="0" id="f-attendance" placeholder="e.g. 214" value="${v.attendance}"></label>
+          ${attendanceFromPco ? `<div style="color:var(--muted);font-size:13px;margin-top:-10px;">Pulled from Planning Center Check-Ins — adjust it if it's off.</div>` : ""}
           <label class="field"><span id="unity-label">Oneness in One Voice (worship unity) — ${v.unity}/5</span><input type="range" min="1" max="5" value="${v.unity}" id="f-unity"></label>
           <label class="field"><span id="engagement-label">Audience Engagement — ${v.engagement}/5</span><input type="range" min="1" max="5" value="${v.engagement}" id="f-engagement"></label>
           <label class="field"><span>Loudness (dB)</span><input type="number" min="0" id="f-loudness" placeholder="e.g. 92" value="${v.loudness}"></label>

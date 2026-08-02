@@ -4,9 +4,22 @@
 // and locally via a git-ignored `.dev.vars` file for `wrangler pages dev .`.
 
 const PCO_BASE = "https://api.planningcenteronline.com/services/v2";
+const CHECKINS_BASE = "https://api.planningcenteronline.com/check-ins/v2";
 const WINDOW_DAYS_PAST = 14;
 const WINDOW_DAYS_FUTURE = 45;
 const CHURCH_TIMEZONE = "America/New_York";
+
+// How close a Check-Ins "event time" has to be to a Plan's start to count as
+// the same gathering. Services Plans and Check-Ins Events are separate PCO
+// products with no direct link between them, so we match by date/time
+// proximity instead of ID.
+const ATTENDANCE_MATCH_WINDOW_MINUTES = 90;
+
+// Check-Ins "Event" definitions that shouldn't feed into a Plan's attendance
+// number — e.g. a volunteer-only or facilities check-in that happens to fall
+// in the same time window. Tune this once you see your org's real Check-Ins
+// event names show up. Leave empty to include every Check-Ins event.
+const EXCLUDED_CHECKIN_EVENTS = [];
 
 // PlanTime's own `name` attribute is often left blank in practice, so derive
 // a readable local time (e.g. "9:30 AM") from `starts_at` as a fallback —
@@ -148,7 +161,118 @@ export async function onRequestGet(context) {
   }));
 
   const plans = plansPerType.flat().sort((a, b) => a.sort_date.localeCompare(b.sort_date));
+
+  // Attendance lives in Planning Center Check-Ins, a separate product from
+  // Services — only attempt it, and only for Plans whose service has already
+  // happened (nothing to check people into yet for future Plans). Any
+  // failure here (Check-Ins not enabled, token lacks access, etc.) is
+  // reported as a warning and otherwise ignored — Plans still load fine.
+  const now = Date.now();
+  try {
+    const { eventTimes, error } = await fetchCheckinEventTimes(headers, windowStart, now);
+    if (error) warnings.push({ source: "check-ins", error });
+    attachAttendance(plans, eventTimes, now);
+  } catch (err) {
+    warnings.push({ source: "check-ins", error: err.message });
+  }
+
   return json({ plans, warnings });
+}
+
+// Pulls every Check-Ins "event time" (an actual occurrence of a recurring
+// Check-Ins Event) that falls inside our window, along with its attendance
+// count. Returns [] with an `error` string if Check-Ins isn't reachable or
+// the token can't see it — callers should treat that as "no data available",
+// not a hard failure.
+async function fetchCheckinEventTimes(headers, windowStart, windowEnd) {
+  let eventsRes;
+  try {
+    eventsRes = await fetch(`${CHECKINS_BASE}/events?per_page=100`, { headers });
+  } catch (err) {
+    return { eventTimes: [], error: "unreachable: " + err.message };
+  }
+  if (!eventsRes.ok) {
+    return { eventTimes: [], error: `status ${eventsRes.status}` };
+  }
+  const eventsBody = await eventsRes.json();
+  const events = eventsBody.data
+    .map(e => ({ id: e.id, name: e.attributes.name }))
+    .filter(e => !EXCLUDED_CHECKIN_EVENTS.some(ex => ex.toLowerCase() === e.name.toLowerCase()));
+
+  const eventTimes = [];
+  await Promise.all(events.map(async (ev) => {
+    let timesRes;
+    try {
+      timesRes = await fetch(`${CHECKINS_BASE}/events/${ev.id}/event_times?order=-starts_at&per_page=25`, { headers });
+    } catch (err) {
+      return;
+    }
+    if (!timesRes.ok) return;
+    const timesBody = await timesRes.json();
+    const inWindow = timesBody.data
+      .filter(t => t.attributes.starts_at)
+      .filter(t => {
+        const ts = new Date(t.attributes.starts_at).getTime();
+        return ts >= windowStart && ts <= windowEnd;
+      });
+
+    await Promise.all(inWindow.map(async (t) => {
+      const count = await fetchEventTimeAttendance(headers, t.id);
+      if (count != null) {
+        eventTimes.push({ starts_at: t.attributes.starts_at, count, event_name: ev.name });
+      }
+    }));
+  }));
+
+  return { eventTimes, error: null };
+}
+
+// Prefer explicit Headcounts (a manually-entered total per event time, e.g.
+// for churches that don't scan individual check-ins) since that's the
+// authoritative number when it exists. Otherwise fall back to counting
+// individual check-in records for that event time via the list's total_count
+// — cheap because per_page=1 still returns the full count in `meta`.
+async function fetchEventTimeAttendance(headers, eventTimeId) {
+  try {
+    const hcRes = await fetch(`${CHECKINS_BASE}/event_times/${eventTimeId}/headcounts?per_page=100`, { headers });
+    if (hcRes.ok) {
+      const hcBody = await hcRes.json();
+      if (hcBody.data && hcBody.data.length > 0) {
+        return hcBody.data.reduce((sum, h) => sum + (h.attributes.total || 0), 0);
+      }
+    }
+  } catch (err) {
+    // fall through to check_ins count
+  }
+  try {
+    const ciRes = await fetch(`${CHECKINS_BASE}/event_times/${eventTimeId}/check_ins?per_page=1`, { headers });
+    if (ciRes.ok) {
+      const ciBody = await ciRes.json();
+      if (ciBody.meta && typeof ciBody.meta.total_count === "number") {
+        return ciBody.meta.total_count;
+      }
+    }
+  } catch (err) {
+    // no attendance data available for this event time
+  }
+  return null;
+}
+
+// Matches each past Plan to any Check-Ins event times within
+// ATTENDANCE_MATCH_WINDOW_MINUTES of its start, summing their counts (a
+// service often has more than one relevant Check-Ins Event running at once,
+// e.g. adults + kids). Sets `pco_attendance` on the Plan when a match exists;
+// leaves it unset otherwise so the UI can fall back to manual entry.
+function attachAttendance(plans, eventTimes, now) {
+  const matchWindowMs = ATTENDANCE_MATCH_WINDOW_MINUTES * 60000;
+  plans.forEach(p => {
+    const planTime = new Date(p.sort_date).getTime();
+    if (planTime > now) return;
+    const matches = eventTimes.filter(t => Math.abs(new Date(t.starts_at).getTime() - planTime) <= matchWindowMs);
+    if (matches.length > 0) {
+      p.pco_attendance = matches.reduce((sum, m) => sum + m.count, 0);
+    }
+  });
 }
 
 function json(body, status = 200) {

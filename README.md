@@ -155,6 +155,8 @@ If `PCO_APP_ID`/`PCO_SECRET` aren't set, the Planning Center tab just shows a co
 
 Service Type folder names in Planning Center won't necessarily match Pulse's fixed service list (`9:30 AM`, `11:00 AM`, `Worship Night`, `SkyYouth`, `Special Event`). Pulse makes a best-effort guess via `PCO_SERVICE_TYPE_ALIASES` near the top of `index.html`'s script — tune those arrays once you see your real folder names show up as "unmatched."
 
+**Attendance sync (optional, needs Check-Ins):** attendance isn't part of Planning Center Services — it lives in the separate **Check-Ins** product. If the same token's account has Check-Ins access, `functions/api/pco-plans.js` also looks up each past Plan's attendance there (preferring a manually-entered Headcount total, falling back to counting individual check-ins) and matches it to the Plan by date/time proximity (within `ATTENDANCE_MATCH_WINDOW_MINUTES`, default 90). When it finds a number, the "Attendance (headcount)" field in the log modal pre-fills with it — still editable, so you can correct it before saving. If Check-Ins isn't enabled, isn't visible to the token's account, or nothing matches, the field just starts blank like before; nothing else breaks. Tune `EXCLUDED_CHECKIN_EVENTS` near the top of that file if you have Check-Ins Events (e.g. a volunteer-only check-in) that shouldn't count toward a service's attendance.
+
 ### 5. (Optional) Custom domain
 In the Pages project → **Custom domains** → add something like `pulse.skylinechurchnj.org` if you own that domain and it's on Cloudflare DNS.
 
