@@ -258,21 +258,36 @@ async function fetchEventTimeAttendance(headers, eventTimeId) {
   return null;
 }
 
-// Matches each past Plan to any Check-Ins event times within
-// ATTENDANCE_MATCH_WINDOW_MINUTES of its start, summing their counts (a
-// service often has more than one relevant Check-Ins Event running at once,
-// e.g. adults + kids). Sets `pco_attendance` on the Plan when a match exists;
-// leaves it unset otherwise so the UI can fall back to manual entry.
+// Assigns each Check-Ins event time to its single nearest past Plan (within
+// ATTENDANCE_MATCH_WINDOW_MINUTES), then sums whatever lands on each Plan —
+// a service often has more than one relevant Check-Ins Event running at
+// once (e.g. adults + kids), and those should combine. But back-to-back
+// services (e.g. 9:30/11:00, exactly ATTENDANCE_MATCH_WINDOW_MINUTES apart)
+// must not both claim the same event time: assigning by nearest match,
+// rather than "every Plan within range", keeps one occurrence from being
+// double-counted onto its neighbor. Sets `pco_attendance` on a Plan only
+// when something lands on it; leaves it unset otherwise so the UI falls
+// back to manual entry.
 function attachAttendance(plans, eventTimes, now) {
   const matchWindowMs = ATTENDANCE_MATCH_WINDOW_MINUTES * 60000;
-  plans.forEach(p => {
-    const planTime = new Date(p.sort_date).getTime();
-    if (planTime > now) return;
-    const matches = eventTimes.filter(t => Math.abs(new Date(t.starts_at).getTime() - planTime) <= matchWindowMs);
-    if (matches.length > 0) {
-      p.pco_attendance = matches.reduce((sum, m) => sum + m.count, 0);
-    }
+  const pastPlans = plans.filter(p => new Date(p.sort_date).getTime() <= now);
+  const totals = new Map();
+
+  eventTimes.forEach(t => {
+    const ts = new Date(t.starts_at).getTime();
+    let best = null;
+    let bestDiff = Infinity;
+    pastPlans.forEach(p => {
+      const diff = Math.abs(new Date(p.sort_date).getTime() - ts);
+      if (diff <= matchWindowMs && diff < bestDiff) {
+        bestDiff = diff;
+        best = p;
+      }
+    });
+    if (best) totals.set(best, (totals.get(best) || 0) + t.count);
   });
+
+  totals.forEach((sum, plan) => { plan.pco_attendance = sum; });
 }
 
 function json(body, status = 200) {
