@@ -356,6 +356,7 @@ let charts = [];
 let filterType = "All";
 let pcoPlans = [];
 let pcoError = null;
+let pcoWarnings = [];
 let pcoLoaded = false;
 let pcoLoading = false;
 let pcoFilterTypes = new Set();
@@ -1239,16 +1240,35 @@ async function loadPcoPlans(force) {
     if (!res.ok) {
       pcoError = body.error || `Planning Center request failed (${res.status}).`;
       pcoPlans = [];
+      pcoWarnings = [];
     } else {
       pcoPlans = body.plans || [];
+      pcoWarnings = body.warnings || [];
     }
   } catch (err) {
     pcoError = "Couldn't reach Planning Center: " + err.message;
     pcoPlans = [];
+    pcoWarnings = [];
   }
   pcoLoading = false;
   pcoLoaded = true;
   render();
+}
+
+// Attendance sync is best-effort — surface *why* it's not landing rather
+// than silently leaving every row's Attendance column blank, since "no
+// permission" and "no one's checking in" look identical otherwise.
+function checkinsWarningMessage(w) {
+  if (w.status === 401 || w.status === 403) {
+    return `Attendance sync is unavailable — Planning Center returned a permission error for Check-Ins (status ${w.status}). Confirm this token's user has Check-Ins access, and that Check-Ins is enabled for your organization.`;
+  }
+  if (w.status === 404) {
+    return "Attendance sync is unavailable — the Check-Ins API returned 404. This organization may not have Check-Ins enabled.";
+  }
+  if (w.status) {
+    return `Attendance sync is unavailable — the Check-Ins request failed (status ${w.status}).`;
+  }
+  return "Attendance sync is unavailable — couldn't reach Check-Ins: " + escapeHtml(w.error || "unknown error");
 }
 
 function renderPcoSection(plans, filterState, opts) {
@@ -1266,8 +1286,12 @@ function renderPcoSection(plans, filterState, opts) {
   if (pcoError) {
     return `${header}<div class="error-banner">${escapeHtml(pcoError)}</div>`;
   }
+
+  const checkinsWarning = pcoWarnings.find(w => w.source === "check-ins");
+  const checkinsNote = checkinsWarning ? `<div class="error-banner">${checkinsWarningMessage(checkinsWarning)}</div>` : "";
+
   if (plans.length === 0) {
-    return `${header}<div class="empty">
+    return `${header}${checkinsNote}<div class="empty">
       <div class="display">${opts.emptyTitle}</div>
       <div>${opts.emptyBody}</div>
     </div>`;
@@ -1289,7 +1313,7 @@ function renderPcoSection(plans, filterState, opts) {
   const filteredPlans = filterState.size === 0 ? plans : plans.filter(p => filterState.has(pcoRowLabel(p)));
 
   if (filteredPlans.length === 0) {
-    return `${header}${filterRow}<div class="filter-empty">No plans for ${[...filterState].map(escapeHtml).join(", ")}.</div>`;
+    return `${header}${checkinsNote}${filterRow}<div class="filter-empty">No plans for ${[...filterState].map(escapeHtml).join(", ")}.</div>`;
   }
 
   const entriesByPlan = {};
@@ -1332,7 +1356,7 @@ function renderPcoSection(plans, filterState, opts) {
     </tr>`;
   }).join("");
 
-  return `${header}${filterRow}<div class="table-scroll"><table>
+  return `${header}${checkinsNote}${filterRow}<div class="table-scroll"><table>
     <thead><tr><th>Date</th><th>Plan</th><th>Attendance</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
