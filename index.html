@@ -1325,12 +1325,15 @@ function renderPcoSection(plans, filterState, opts) {
           </div>
         </div>
       </td>
+      <td class="num">${p.attendance_from_pco != null
+        ? `${p.attendance_from_pco.toLocaleString()} <span class="pco-attendance-badge from-pco">From PCO</span>`
+        : `<span class="notes">—</span>`}</td>
       <td class="actions-cell"><div class="pco-status-group">${loggedPills}${logBtn}</div></td>
     </tr>`;
   }).join("");
 
   return `${header}${filterRow}<div class="table-scroll"><table>
-    <thead><tr><th>Date</th><th>Plan</th><th></th></tr></thead>
+    <thead><tr><th>Date</th><th>Plan</th><th>Attendance</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
