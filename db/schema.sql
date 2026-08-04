@@ -120,13 +120,26 @@ create table if not exists public.production_entries (
   computer_name text,
   audio_present boolean not null default true,
   audio_name text,
-  slides_sync_fit boolean not null default true,
+  slides_grade smallint not null default 1 check (slides_grade between 1 and 4),
+  slides_miss_count integer not null default 0 check (slides_miss_count >= 0),
   camera_direction_fit boolean not null default true,
   notes text default '',
   logged_by text,
   created_at timestamptz not null default now(),
   unique (service_date, service_type)
 );
+
+-- The slides fit check evolved from a plain yes/no into a graded rating
+-- (1 = best, 4 = worst) plus a raw miss count, so there's enough signal for
+-- a "who's sharpest on slides" leaderboard. A miss = a slide shown at the
+-- wrong time, a missed video/text cue, or a lyric slide that changes too
+-- late (should advance on the 2nd-to-last word). Safe to re-run.
+alter table public.production_entries
+  drop column if exists slides_sync_fit;
+alter table public.production_entries
+  add column if not exists slides_grade smallint not null default 1 check (slides_grade between 1 and 4);
+alter table public.production_entries
+  add column if not exists slides_miss_count integer not null default 0 check (slides_miss_count >= 0);
 
 alter table public.production_entries enable row level security;
 

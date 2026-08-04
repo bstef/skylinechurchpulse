@@ -131,6 +131,7 @@
   .field{display:flex;flex-direction:column;gap:6px;min-width:0;}
   .field span{font-size:13px;font-weight:600;color:var(--field-label);}
   .field-section-label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--brass);font-weight:700;border-top:1px solid var(--line);padding-top:14px;}
+  .field-hint{font-size:12px;color:var(--muted);line-height:1.4;margin-top:-10px;}
   .role-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);}
   .role-row select{width:auto;flex-shrink:0;}
   .role-name{flex:0 0 150px;font-size:14px;font-weight:600;color:var(--field-label);}
@@ -414,6 +415,13 @@ function yesNoSelect(id, value) {
   return `<select id="${id}">
     <option value="yes" ${value ? "selected" : ""}>Yes</option>
     <option value="no" ${!value ? "selected" : ""}>No</option>
+  </select>`;
+}
+
+const SLIDES_GRADE_LABELS = { 1: "1 — Excellent", 2: "2 — Good", 3: "3 — Rough", 4: "4 — Poor" };
+function slidesGradeSelect(id, value) {
+  return `<select id="${id}">
+    ${[1,2,3,4].map(g => `<option value="${g}" ${g===value?"selected":""}>${SLIDES_GRADE_LABELS[g]}</option>`).join("")}
   </select>`;
 }
 
@@ -789,7 +797,7 @@ function renderProduction() {
       <td>${fmtDate(e.service_date)}</td>
       <td><span class="service-badge ${badgeClass(e.service_type)}">${escapeHtml(e.service_type)}</span></td>
       <td class="num">${presentCount}/${PRODUCTION_ROLES.length}</td>
-      <td>${e.slides_sync_fit ? "✓" : "✕"} Slides &nbsp; ${e.camera_direction_fit ? "✓" : "✕"} Camera</td>
+      <td>Slides: ${e.slides_grade ?? 1} (${e.slides_miss_count ?? 0} miss${(e.slides_miss_count ?? 0) === 1 ? "" : "es"}) &nbsp; ${e.camera_direction_fit ? "✓" : "✕"} Camera</td>
       <td>${e.logged_by ? escapeHtml(e.logged_by) : "—"}</td>
       <td class="actions-cell">
         <button class="icon-btn prod-del-btn" data-id="${e.id}" title="Delete">✕</button>
@@ -853,12 +861,12 @@ function exportProductionCSV() {
   if (!productionEntries.length) return;
   const header = [
     "Date", "Service", ...PRODUCTION_ROLES.flatMap(r => [`${r.label} Present (Y/N)`, `${r.label} Name`]),
-    "Slides Sync (Y/N)", "Camera Direction (Y/N)", "Notes", "Logged By",
+    "Slides Grade (1-4)", "Slide Misses", "Camera Direction (Y/N)", "Notes", "Logged By",
   ];
   const rows = productionEntries.map(e => [
     e.service_date, e.service_type,
     ...PRODUCTION_ROLES.flatMap(r => [e[`${r.key}_present`] ? "Y" : "N", e[`${r.key}_name`] || ""]),
-    e.slides_sync_fit ? "Y" : "N", e.camera_direction_fit ? "Y" : "N", e.notes || "", e.logged_by || "",
+    e.slides_grade ?? 1, e.slides_miss_count ?? 0, e.camera_direction_fit ? "Y" : "N", e.notes || "", e.logged_by || "",
   ]);
   const csv = [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\r\n");
   downloadBlob(csv, "text/csv;charset=utf-8;", `skyline-pulse-production-${new Date().toISOString().slice(0,10)}.csv`);
@@ -913,11 +921,11 @@ function exportProductionPDF() {
     startY: 26,
     styles: { fontSize: 8 },
     headStyles: { fillColor: [40, 118, 255] },
-    head: [["Date", "Service", ...PRODUCTION_ROLES.map(r => r.label), "Slides Sync", "Camera Direction", "Logged By", "Notes"]],
+    head: [["Date", "Service", ...PRODUCTION_ROLES.map(r => r.label), "Slides Grade", "Slide Misses", "Camera Direction", "Logged By", "Notes"]],
     body: productionEntries.map(e => [
       fmtDate(e.service_date), e.service_type,
       ...PRODUCTION_ROLES.map(r => e[`${r.key}_present`] ? (e[`${r.key}_name`] ? `Y (${e[`${r.key}_name`]})` : "Y") : "N"),
-      e.slides_sync_fit ? "Y" : "N", e.camera_direction_fit ? "Y" : "N",
+      e.slides_grade ?? 1, e.slides_miss_count ?? 0, e.camera_direction_fit ? "Y" : "N",
       e.logged_by || "", e.notes || "",
     ]),
   });
@@ -1102,17 +1110,31 @@ function renderProductionAnalyticsShell() {
   }
 
   const avgRolesPresent = avg(productionEntries.map(e => PRODUCTION_ROLES.filter(r => e[`${r.key}_present`]).length));
+  const avgSlidesGrade = avg(productionEntries.map(e => e.slides_grade ?? 1));
+  const totalSlideMisses = productionEntries.reduce((sum, e) => sum + (e.slides_miss_count ?? 0), 0);
   const loggerCounts = loggedByCountsIn(productionEntries);
+  const slidesLeaderboard = slidesLeaderboardIn(productionEntries);
 
   return `
     <div class="stats">
       <div class="pill"><div class="label">Logged</div><div class="value">${productionEntries.length}</div></div>
       <div class="pill"><div class="label">Avg Roles Present</div><div class="value">${avgRolesPresent.toFixed(1)}<span>/${PRODUCTION_ROLES.length}</span></div></div>
-      <div class="pill"><div class="label">Slides Synced</div><div class="value">${pctTrueIn(productionEntries, "slides_sync_fit")}<span>%</span></div></div>
+      <div class="pill"><div class="label">Avg Slides Grade</div><div class="value">${avgSlidesGrade.toFixed(1)}<span>/4</span></div></div>
+      <div class="pill"><div class="label">Total Slide Misses</div><div class="value">${totalSlideMisses}</div></div>
       <div class="pill"><div class="label">Camera Direction</div><div class="value">${pctTrueIn(productionEntries, "camera_direction_fit")}<span>%</span></div></div>
     </div>
     <div class="card"><h3 class="display">Role Attendance — % Present</h3><div class="chart-box"><canvas id="chart-role-attendance"></canvas></div></div>
-    <div class="card"><h3 class="display">Fit Checks — % Landed Well</h3><div class="chart-box"><canvas id="chart-production-fit"></canvas></div></div>
+    <div class="card"><h3 class="display">Slides Grade Distribution</h3><div class="chart-box"><canvas id="chart-slides-grade"></canvas></div></div>
+    <div class="card"><h3 class="display">Camera Direction — % Landed Well</h3><div class="chart-box"><canvas id="chart-camera-direction"></canvas></div></div>
+    ${slidesLeaderboard.length ? `
+    <div class="card">
+      <h3 class="display">Slides Leaderboard</h3>
+      <div style="color:var(--muted);font-size:13px;margin:-4px 0 12px;">Ranked by avg slides grade (1 = best), then fewest misses. Tracks whoever ran Computer/ProPresenter.</div>
+      <div class="chart-box"><canvas id="chart-slides-leaderboard"></canvas></div>
+      <div class="logger-list">
+        ${slidesLeaderboard.map((l, i) => `<div class="logger-row"><span class="logger-name">#${i+1} ${escapeHtml(l.name)}</span><span class="logger-meta">avg grade ${l.avgGrade.toFixed(1)} · ${l.misses} miss${l.misses===1?"":"es"} across ${l.count} service${l.count===1?"":"s"}</span></div>`).join("")}
+      </div>
+    </div>` : ""}
     ${loggerCounts.length ? `
     <div class="card">
       <h3 class="display">Who's Logging Production</h3>
@@ -1122,6 +1144,23 @@ function renderProductionAnalyticsShell() {
       </div>
     </div>` : ""}
   `;
+}
+
+function slidesLeaderboardIn(arr) {
+  const byName = new Map();
+  arr.forEach(e => {
+    const name = (e.computer_name || "").trim();
+    if (!name) return;
+    const cur = byName.get(name) || { name, count: 0, gradeTotal: 0, misses: 0, lastDate: e.service_date };
+    cur.count += 1;
+    cur.gradeTotal += e.slides_grade ?? 1;
+    cur.misses += e.slides_miss_count ?? 0;
+    if (e.service_date > cur.lastDate) cur.lastDate = e.service_date;
+    byName.set(name, cur);
+  });
+  return [...byName.values()]
+    .map(l => ({ ...l, avgGrade: l.gradeTotal / l.count }))
+    .sort((a, b) => a.avgGrade - b.avgGrade || a.misses - b.misses);
 }
 
 function renderProductionCharts() {
@@ -1137,13 +1176,32 @@ function renderProductionCharts() {
     options: { plugins: { legend: { display:false } }, scales: { x:{grid:{display:false}}, y:{min:0,max:100,grid:{color:t.line}} } }
   });
 
-  const c2 = new Chart(document.getElementById("chart-production-fit"), {
+  const gradeCounts = [1,2,3,4].map(g => productionEntries.filter(e => (e.slides_grade ?? 1) === g).length);
+  const c2 = new Chart(document.getElementById("chart-slides-grade"), {
     type: "bar",
-    data: { labels: ["Slides Sync", "Camera Direction"], datasets: [{ label: "% Landed Well", data: [pctTrueIn(productionEntries, "slides_sync_fit"), pctTrueIn(productionEntries, "camera_direction_fit")], backgroundColor: [t.pew, t.rust], borderRadius: 3 }] },
+    data: { labels: ["1 (Best)", "2", "3", "4 (Worst)"], datasets: [{ label: "Services", data: gradeCounts, backgroundColor: [t.c1, t.c2, t.brass, t.rust], borderRadius: 3 }] },
+    options: { plugins: { legend: { display:false } }, scales: { x:{grid:{display:false}}, y:{min:0,ticks:{precision:0},grid:{color:t.line}} } }
+  });
+
+  const c2b = new Chart(document.getElementById("chart-camera-direction"), {
+    type: "bar",
+    data: { labels: ["Camera Direction"], datasets: [{ label: "% Landed Well", data: [pctTrueIn(productionEntries, "camera_direction_fit")], backgroundColor: [t.rust], borderRadius: 3 }] },
     options: { plugins: { legend: { display:false } }, scales: { x:{grid:{display:false}}, y:{min:0,max:100,grid:{color:t.line}} } }
   });
 
-  charts = [c1, c2];
+  charts = [c1, c2, c2b];
+
+  const leaderboardEl = document.getElementById("chart-slides-leaderboard");
+  if (leaderboardEl) {
+    const slidesLeaderboard = slidesLeaderboardIn(productionEntries);
+    const palette = [t.c1, t.c2, t.brass, t.rust, t.pew, t.c0, t.c3, t.c4];
+    const c4 = new Chart(leaderboardEl, {
+      type: "bar",
+      data: { labels: slidesLeaderboard.map(l=>l.name), datasets: [{ label: "Avg Slides Grade (1 = best)", data: slidesLeaderboard.map(l=>Number(l.avgGrade.toFixed(2))), backgroundColor: slidesLeaderboard.map((_,i)=>palette[i % palette.length]), borderRadius: 3 }] },
+      options: { indexAxis: "y", plugins: { legend: { display:false } }, scales: { x:{ min:1, max:4, grid:{color:t.line} }, y:{ grid:{display:false} } } }
+    });
+    charts.push(c4);
+  }
 
   const loggerEl = document.getElementById("chart-production-loggedby");
   if (loggerEl) {
@@ -1613,7 +1671,8 @@ function openProductionModal(entry) {
   const v = {
     date: entry ? entry.service_date : today,
     service: entry ? entry.service_type : "",
-    slidesSync: entry ? entry.slides_sync_fit : true,
+    slidesGrade: entry ? (entry.slides_grade || 1) : 1,
+    slidesMisses: entry ? (entry.slides_miss_count ?? 0) : 0,
     cameraDirection: entry ? entry.camera_direction_fit : true,
     notes: entry ? (entry.notes || "") : "",
     loggedBy: entry ? (entry.logged_by || "") : (localStorage.getItem("skyline-logged-by") || ""),
@@ -1651,7 +1710,11 @@ function openProductionModal(entry) {
 
           <div class="field-section-label">Fit Checks</div>
           <div class="row2">
-            <label class="field" style="flex:1"><span>Slides kept pace with worship</span>${yesNoSelect("pf-slides", v.slidesSync)}</label>
+            <label class="field" style="flex:1"><span>Slides grade</span>${slidesGradeSelect("pf-slides-grade", v.slidesGrade)}</label>
+            <label class="field" style="flex:1"><span>Slide misses</span><input type="number" id="pf-slides-misses" min="0" step="1" value="${v.slidesMisses}"></label>
+          </div>
+          <div class="field-hint">What's a miss? Slides shown at the wrong time. Missed cues on videos and text slides. Lyric slides that change too slowly — should advance on the 2nd-to-last word.</div>
+          <div class="row2">
             <label class="field" style="flex:1"><span>Camera work/direction was on point</span>${yesNoSelect("pf-camera-direction", v.cameraDirection)}</label>
           </div>
 
@@ -1678,7 +1741,8 @@ function openProductionModal(entry) {
       service_date: serviceDate,
       service_type: serviceType,
       notes: document.getElementById("pf-notes").value.trim(),
-      slides_sync_fit: document.getElementById("pf-slides").value === "yes",
+      slides_grade: Number(document.getElementById("pf-slides-grade").value),
+      slides_miss_count: Math.max(0, parseInt(document.getElementById("pf-slides-misses").value, 10) || 0),
       camera_direction_fit: document.getElementById("pf-camera-direction").value === "yes",
       logged_by: loggedBy,
     };
