@@ -4,6 +4,7 @@
 // and locally via a git-ignored `.dev.vars` file for `wrangler pages dev .`.
 
 const PCO_BASE = "https://api.planningcenteronline.com/services/v2";
+const CHECKINS_BASE = "https://api.planningcenteronline.com/check-ins/v2";
 const WINDOW_DAYS_PAST = 14;
 const WINDOW_DAYS_FUTURE = 45;
 const CHURCH_TIMEZONE = "America/New_York";
@@ -17,6 +18,21 @@ function localTimeLabel(iso) {
   } catch (err) {
     return "";
   }
+}
+
+// Calendar day (YYYY-MM-DD) in the church's own timezone, so a Saturday-night
+// UTC rollover doesn't shift a plan onto the wrong day when matching against
+// Check-Ins event periods.
+function churchDateKey(iso) {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: CHURCH_TIMEZONE }).format(new Date(iso));
+  } catch (err) {
+    return "";
+  }
+}
+
+function normalizeWords(s) {
+  return new Set((s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter(Boolean));
 }
 
 // Service Type folders that aren't worship/gathering events Pulse cares about
@@ -39,6 +55,80 @@ const EXCLUDED_SERVICE_TYPES = [
 // Add a folder name here only once you've confirmed its PlanTimes really do
 // represent separate services.
 const MULTI_TIME_SERVICE_TYPES = ["Celebration Service"];
+
+// Planning Center Check-Ins reports headcounts per "event period" (roughly:
+// one calendar occurrence of a Check-Ins Event, usually a whole day/weekend)
+// rather than per individual service time — so a church running 9:30/11:00
+// under one combined Check-Ins Event only gets one combined number back.
+// There's no plan_id on either side to join on, so this pulls every event
+// period in the window and matches it to a Services Plan by same-day date
+// plus best-effort name similarity (falls back to nearest start time). It's
+// a suggestion, not ground truth — the log form always lets you override it.
+async function fetchCheckinsPeriods(headers, windowStart, windowEnd) {
+  let eventsRes;
+  try {
+    eventsRes = await fetch(`${CHECKINS_BASE}/events?per_page=100`, { headers });
+  } catch (err) {
+    return { periods: [], warning: { source: "check-ins", error: err.message } };
+  }
+  if (!eventsRes.ok) {
+    // Check-Ins may not be enabled for this org/token — degrade quietly.
+    return { periods: [], warning: { source: "check-ins", status: eventsRes.status } };
+  }
+  const eventsBody = await eventsRes.json();
+  const events = (eventsBody.data || [])
+    .filter(e => !e.attributes.archived_at)
+    .map(e => ({ id: e.id, name: e.attributes.name || "" }));
+
+  const periodsPerEvent = await Promise.all(events.map(async (ev) => {
+    let res;
+    try {
+      res = await fetch(`${CHECKINS_BASE}/events/${ev.id}/event_periods?order=-starts_at&per_page=25`, { headers });
+    } catch (err) {
+      return [];
+    }
+    if (!res.ok) return [];
+    const body = await res.json();
+    return (body.data || [])
+      .filter(p => p.attributes.starts_at)
+      .filter(p => {
+        const t = new Date(p.attributes.starts_at).getTime();
+        return t >= windowStart && t <= windowEnd;
+      })
+      .map(p => ({
+        eventName: ev.name,
+        startsAt: p.attributes.starts_at,
+        dateKey: churchDateKey(p.attributes.starts_at),
+        attendance: (p.attributes.regular_count || 0) + (p.attributes.guest_count || 0),
+      }));
+  }));
+
+  return { periods: periodsPerEvent.flat(), warning: null };
+}
+
+function matchPcoAttendance(plan, periods) {
+  const candidates = periods.filter(p => p.dateKey === churchDateKey(plan.sort_date));
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0].attendance;
+
+  const planWords = normalizeWords([plan.service_type_name, plan.plan_time_name, plan.title].filter(Boolean).join(" "));
+  const planTime = new Date(plan.sort_date).getTime();
+  let best = null;
+  let bestScore = -1;
+  let bestTimeDiff = Infinity;
+  for (const c of candidates) {
+    const eventWords = normalizeWords(c.eventName);
+    let overlap = 0;
+    eventWords.forEach(w => { if (planWords.has(w)) overlap += 1; });
+    const timeDiff = Math.abs(new Date(c.startsAt).getTime() - planTime);
+    if (overlap > bestScore || (overlap === bestScore && timeDiff < bestTimeDiff)) {
+      best = c;
+      bestScore = overlap;
+      bestTimeDiff = timeDiff;
+    }
+  }
+  return best ? best.attendance : null;
+}
 
 export async function onRequestGet(context) {
   const { PCO_APP_ID, PCO_SECRET } = context.env;
@@ -68,6 +158,8 @@ export async function onRequestGet(context) {
   const windowStart = Date.now() - WINDOW_DAYS_PAST * 86400000;
   const windowEnd = Date.now() + WINDOW_DAYS_FUTURE * 86400000;
   const warnings = [];
+
+  const checkinsPromise = fetchCheckinsPeriods(headers, windowStart, windowEnd);
 
   const plansPerType = await Promise.all(serviceTypes.map(async (st) => {
     let res;
@@ -148,6 +240,11 @@ export async function onRequestGet(context) {
   }));
 
   const plans = plansPerType.flat().sort((a, b) => a.sort_date.localeCompare(b.sort_date));
+
+  const { periods: checkinsPeriods, warning: checkinsWarning } = await checkinsPromise;
+  if (checkinsWarning) warnings.push(checkinsWarning);
+  plans.forEach(p => { p.attendance_from_pco = matchPcoAttendance(p, checkinsPeriods); });
+
   return json({ plans, warnings });
 }
 

@@ -58,6 +58,13 @@
   nav button{padding:9px 18px;border:none;background:transparent;color:var(--ink);font-size:14px;font-weight:600;border-radius:3px 3px 0 0;white-space:nowrap;flex-shrink:0;}
   nav button.active{background:var(--ink);color:var(--paper);}
   nav button.page-hidden{display:none;}
+  /* Services tab is hidden now that Planning Center is the primary logging
+     path — the "+ Log a Service" header button still opens the same modal
+     as a manual fallback (e.g. events with no matching PCO plan), and
+     entries stay editable from the Calendar tab. Nothing here was removed;
+     drop this rule (and the matching one in the nav markup) to bring the
+     tab back if that changes. */
+  #tab-log{display:none;}
   main{max-width:1080px;margin:0 auto;padding:32px 24px 80px;}
   .table-scroll{overflow-x:auto;}
   @media (max-width: 640px){
@@ -195,6 +202,9 @@
   .pco-artwork{width:40px;height:40px;border-radius:4px;object-fit:cover;flex-shrink:0;border:1px solid var(--line);}
   .pco-artwork-lg{width:56px;height:56px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid var(--line);}
   .pco-linked-note{background:var(--brass-soft);color:var(--brass);border-radius:4px;padding:10px 14px;font-size:13px;font-weight:600;margin-top:-8px;}
+  .pco-attendance-badge{display:inline-block;border-radius:10px;padding:2px 8px;font-size:11px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;margin-left:6px;vertical-align:middle;}
+  .pco-attendance-badge.from-pco{background:var(--brass-soft);color:var(--brass);}
+  .pco-attendance-badge.overridden{background:var(--banner-bg);color:var(--rust);}
   .cal-header{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
   .cal-header-title{min-width:200px;}
   .cal-header-title-day{min-width:280px;}
@@ -257,6 +267,7 @@
       <button id="tab-pco" class="active">Planning Center</button>
       <button id="tab-production">Production</button>
       <button id="tab-skyyouth">SkyYouth</button>
+      <!-- Hidden via #tab-log{display:none} in <style> — see comment there. -->
       <button id="tab-log">Services</button>
       <button id="tab-calendar">Calendar</button>
       <button id="tab-analytics">Services Analytics</button>
@@ -1540,10 +1551,11 @@ function openModal(entry, pcoPlan) {
   const today = new Date().toISOString().slice(0,10);
   const pcoMatchedService = (!editing && pcoPlan) ? guessServiceType(pcoPlan.plan_time_name || pcoPlan.service_type_name) : "";
   const serviceLocked = !!pcoMatchedService;
+  const pcoAttendance = entry ? (entry.attendance_pco_value ?? null) : (pcoPlan && pcoPlan.attendance_from_pco != null ? pcoPlan.attendance_from_pco : null);
   const v = {
     date: entry ? entry.service_date : (pcoPlan ? pcoPlan.sort_date.slice(0,10) : today),
     service: entry ? entry.service_type : pcoMatchedService,
-    attendance: entry ? entry.attendance : "",
+    attendance: entry ? entry.attendance : (pcoAttendance != null ? pcoAttendance : ""),
     unity: entry ? entry.unity : 3,
     engagement: entry ? entry.engagement : 3,
     loudness: entry ? entry.loudness_db : "",
@@ -1584,7 +1596,10 @@ function openModal(entry, pcoPlan) {
             </label>
             `}
           </div>
-          <label class="field"><span>Attendance (headcount)</span><input type="number" min="0" id="f-attendance" placeholder="e.g. 214" value="${v.attendance}"></label>
+          <label class="field">
+            <span>Attendance (headcount) ${pcoAttendance != null ? `<span id="f-attendance-badge" class="pco-attendance-badge"></span>` : ""}</span>
+            <input type="number" min="0" id="f-attendance" placeholder="e.g. 214" value="${v.attendance}">
+          </label>
           <label class="field"><span id="unity-label">Oneness in One Voice (worship unity) — ${v.unity}/5</span><input type="range" min="1" max="5" value="${v.unity}" id="f-unity"></label>
           <label class="field"><span id="engagement-label">Audience Engagement — ${v.engagement}/5</span><input type="range" min="1" max="5" value="${v.engagement}" id="f-engagement"></label>
           <label class="field"><span>Loudness (dB)</span><input type="number" min="0" id="f-loudness" placeholder="e.g. 92" value="${v.loudness}"></label>
@@ -1616,6 +1631,18 @@ function openModal(entry, pcoPlan) {
 
   document.getElementById("modal-close").addEventListener("click", closeModal);
   document.getElementById("modal-backdrop").addEventListener("click", (e) => { if (e.target.id === "modal-backdrop") closeModal(); });
+  const attendanceBadge = document.getElementById("f-attendance-badge");
+  if (attendanceBadge) {
+    const updateAttendanceBadge = () => {
+      const current = document.getElementById("f-attendance").value;
+      const overridden = Number(current) !== pcoAttendance;
+      attendanceBadge.textContent = overridden ? "Overridden" : "From PCO";
+      attendanceBadge.classList.toggle("overridden", overridden);
+      attendanceBadge.classList.toggle("from-pco", !overridden);
+    };
+    updateAttendanceBadge();
+    document.getElementById("f-attendance").addEventListener("input", updateAttendanceBadge);
+  }
   document.getElementById("f-unity").addEventListener("input", (e) => {
     document.getElementById("unity-label").textContent = `Oneness in One Voice (worship unity) — ${e.target.value}/5`;
   });
@@ -1642,6 +1669,7 @@ function openModal(entry, pcoPlan) {
       service_date: serviceDate,
       service_type: serviceType,
       attendance: Number(attendance),
+      attendance_pco_value: pcoAttendance,
       unity: Number(document.getElementById("f-unity").value),
       engagement: Number(document.getElementById("f-engagement").value),
       loudness_db: Number(loudness),

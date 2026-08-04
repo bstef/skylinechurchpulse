@@ -76,6 +76,14 @@ alter table public.service_entries
 alter table public.service_entries
   add column if not exists logged_by text;
 
+-- The headcount Planning Center Check-Ins reported for this service at the
+-- time it was logged (regular + guest counts on the matched event period),
+-- so the UI can show "From PCO" vs "Overridden" without a second API round
+-- trip. Null means no Check-Ins match was found (or the entry predates this
+-- feature) — attendance is just a manual number in that case. Safe to re-run.
+alter table public.service_entries
+  add column if not exists attendance_pco_value integer;
+
 -- Enable Row Level Security
 alter table public.service_entries enable row level security;
 

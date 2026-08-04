@@ -32,30 +32,39 @@ There's no build step and no framework — `index.html` is the entire applicatio
 
 | | |
 |---|---|
-| 🗓️ **Calendar** | Month grid or a focused Day view for Sunday morning, with combined attendance rollups |
-| 🔗 **Planning Center sync** | Plans, sermon artwork, and multi-service times (9:30/11:00) pulled live from your Services Service Types |
-| 📋 **Ledger** | Every logged service, filterable by type, with inline edit/delete and undo |
-| 📈 **Analytics** | Rolling trend charts for every measurement, plus a breakdown of who's been logging |
+| 🗓️ **Calendar** | Month grid or a focused Day view for Sunday morning — attendance rollups, plus edit/delete on any logged service |
+| 🔗 **Planning Center sync** | Plans, sermon artwork, and multi-service times (9:30/11:00) pulled live from your Services Service Types — attendance headcounts pull in too, from Check-Ins, and stay editable/overridable per service |
+| 🎛️ **Production tracking** | Role attendance (lights, camera, director, computer/ProPresenter, audio), a 1–4 graded slides fit-check with a miss count, and a Slides Leaderboard ranking who's sharpest on cues |
+| 🎧 **SkyYouth** | Its own Planning Center feed, ledger, and analytics — never mixed in with Sunday morning |
+| 📈 **Analytics** | Rolling trend charts for Services, Production, and SkyYouth, plus a breakdown of who's been logging |
 | 🎨 **Three themes** | Light, Dark, and Ocean — remembered per device |
-| ⬇️ **CSV export** | The whole ledger, one click |
+| ⬇️ **Exports** | CSV, formatted PDF tables, and print-ready analytics reports for every dataset |
 
 <div align="center">
 <table>
 <tr>
-<td><img src="docs/images/ledger-light.png" alt="Ledger — Light theme" width="380"></td>
 <td><img src="docs/images/calendar-month-dark.png" alt="Calendar — Dark theme" width="380"></td>
-</tr>
-<tr>
-<td align="center"><sub>Ledger — Light</sub></td>
-<td align="center"><sub>Calendar — Dark</sub></td>
-</tr>
-<tr>
 <td><img src="docs/images/planning-center-light.png" alt="Planning Center tab" width="380"></td>
-<td><img src="docs/images/analytics-ocean.png" alt="Analytics — Ocean theme" width="380"></td>
 </tr>
 <tr>
+<td align="center"><sub>Calendar — Dark</sub></td>
 <td align="center"><sub>Planning Center sync</sub></td>
+</tr>
+<tr>
+<td><img src="docs/images/production-light.png" alt="Production tab" width="380"></td>
+<td><img src="docs/images/skyyouth-light.png" alt="SkyYouth tab" width="380"></td>
+</tr>
+<tr>
+<td align="center"><sub>Production</sub></td>
+<td align="center"><sub>SkyYouth</sub></td>
+</tr>
+<tr>
+<td><img src="docs/images/analytics-ocean.png" alt="Analytics — Ocean theme" width="380"></td>
+<td><img src="docs/images/exports-light.png" alt="Exports page" width="380"></td>
+</tr>
+<tr>
 <td align="center"><sub>Analytics — Ocean</sub></td>
+<td align="center"><sub>Exports</sub></td>
 </tr>
 </table>
 </div>
@@ -65,7 +74,7 @@ There's no build step and no framework — `index.html` is the entire applicatio
 - **`index.html`** — the whole app (Supabase JS + Chart.js loaded from CDN, no build step)
 - **[Supabase](https://supabase.com)** — Postgres + Row Level Security as the backend, called directly from the browser
 - **[Cloudflare Pages](https://pages.cloudflare.com)** — static hosting, auto-deploys on every push to `main`
-- **Cloudflare Pages Functions** (`functions/api/pco-plans.js`) — a small serverless proxy that keeps the Planning Center API token off the client
+- **Cloudflare Pages Functions** (`functions/api/pco-plans.js`) — a small serverless proxy that keeps the Planning Center API token off the client, pulling both Plans (Services) and headcounts (Check-Ins)
 - **[Chart.js](https://www.chartjs.org)** — analytics charts, themed live from the same CSS custom properties as the app
 
 ## Repo layout
@@ -151,9 +160,11 @@ _(Equivalent via CLI: `wrangler pages secret put PCO_APP_ID` / `wrangler pages s
 2. Run `wrangler pages dev .` — this serves `index.html` and `functions/` together locally with those secrets loaded.
 3. Sanity check the credentials directly first if something looks off: `curl -u APP_ID:SECRET https://api.planningcenteronline.com/services/v2/service_types` should return a `200` with JSON.
 
-If `PCO_APP_ID`/`PCO_SECRET` aren't set, the Planning Center tab just shows a configuration error — the rest of the app (Ledger, Analytics) works fine without it.
+If `PCO_APP_ID`/`PCO_SECRET` aren't set, the Planning Center tab just shows a configuration error — the rest of the app (Analytics, Calendar) works fine without it.
 
 Service Type folder names in Planning Center won't necessarily match Pulse's fixed service list (`9:30 AM`, `11:00 AM`, `Worship Night`, `SkyYouth`, `Special Event`). Pulse makes a best-effort guess via `PCO_SERVICE_TYPE_ALIASES` near the top of `index.html`'s script — tune those arrays once you see your real folder names show up as "unmatched."
+
+**Attendance auto-fill (optional, no extra setup):** the same token is also used to pull headcounts from Planning Center **Check-Ins**, if your org has it enabled. `functions/api/pco-plans.js` matches each Check-Ins event period to a Plan by same-day date plus best-effort name similarity, and reports it as `attendance_from_pco` on the plan. The Log form pre-fills Attendance with that number and tags it **"From PCO"**; editing the number relabels it **"Overridden"** — the original PCO number is still saved (`attendance_pco_value` in `service_entries`) so that badge stays correct on later edits. If Check-Ins isn't enabled, or a plan has no same-day match, this just degrades to a blank/manual Attendance field — nothing breaks.
 
 ### 5. (Optional) Custom domain
 In the Pages project → **Custom domains** → add something like `pulse.skylinechurchnj.org` if you own that domain and it's on Cloudflare DNS.
@@ -164,3 +175,4 @@ Send the `.pages.dev` (or custom) URL to the pastor and worship leader. No login
 ## Notes
 - To lock the app down later (e.g. require login), you'd add Supabase Auth and change the RLS policies in `db/schema.sql` from `using (true)` to check `auth.uid()`.
 - All charts and ledger data logic run client-side against Supabase directly. Only the Planning Center calls go through the Cloudflare Function, since that's the one credential that can't be exposed in the browser.
+- The standalone "Services" nav tab is hidden by default now that Planning Center is the primary way to log a service — the header's "+ Log a Service" button still opens the identical form as a manual fallback (e.g. a one-off event with no matching Plan), and every logged service stays editable/deletable from the Calendar tab. Nothing was removed; the tab just isn't a nav destination — see the `#tab-log` comment in `index.html` to bring it back.
