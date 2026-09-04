@@ -54,12 +54,13 @@
   .page-toggle{display:flex;gap:6px;margin-top:24px;}
   .page-toggle-btn{border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:8px 20px;font-size:13px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;border-radius:20px;}
   .page-toggle-btn.active{background:var(--brass);color:var(--paper);border-color:var(--brass);}
-  nav{display:flex;align-items:center;gap:4px;margin-top:14px;overflow-x:auto;}
+  .nav-row{display:flex;align-items:center;gap:4px;margin-top:14px;}
+  nav{display:flex;gap:4px;overflow-x:auto;flex:1;min-width:0;}
   nav button{padding:9px 18px;border:none;background:transparent;color:var(--ink);font-size:14px;font-weight:600;border-radius:3px 3px 0 0;white-space:nowrap;flex-shrink:0;}
   nav button.active{background:var(--ink);color:var(--paper);}
   nav button.page-hidden{display:none;}
-  nav a.nav-help{margin-left:auto;padding:9px 14px;color:var(--muted);text-decoration:none;font-size:13px;font-weight:600;white-space:nowrap;flex-shrink:0;}
-  nav a.nav-help:hover{color:var(--pew);}
+  a.nav-help{padding:9px 14px;color:var(--muted);text-decoration:none;font-size:13px;font-weight:600;white-space:nowrap;flex-shrink:0;}
+  a.nav-help:hover{color:var(--pew);}
   /* Services tab is hidden now that Planning Center is the primary logging
      path — the "+ Log a Service" header button still opens the same modal
      as a manual fallback (e.g. events with no matching PCO plan), and
@@ -265,18 +266,20 @@
       <button class="page-toggle-btn" id="page-analytics">Analytics</button>
       <button class="page-toggle-btn" id="page-exports">Exports</button>
     </div>
-    <nav>
-      <button id="tab-pco" class="active">Sunday Services</button>
-      <button id="tab-production">Production</button>
-      <button id="tab-skyyouth">SkyYouth</button>
-      <!-- Hidden via #tab-log{display:none} in <style> — see comment there. -->
-      <button id="tab-log">Services</button>
-      <button id="tab-calendar">Calendar</button>
-      <button id="tab-analytics">Services Analytics</button>
-      <button id="tab-production-analytics">Production Analytics</button>
-      <button id="tab-skyyouth-analytics">SkyYouth Analytics</button>
+    <div class="nav-row">
+      <nav>
+        <button id="tab-pco" class="active">Sunday Services</button>
+        <button id="tab-production">Production</button>
+        <button id="tab-skyyouth">SkyYouth</button>
+        <!-- Hidden via #tab-log{display:none} in <style> — see comment there. -->
+        <button id="tab-log">Services</button>
+        <button id="tab-calendar">Calendar</button>
+        <button id="tab-analytics">Services Analytics</button>
+        <button id="tab-production-analytics">Production Analytics</button>
+        <button id="tab-skyyouth-analytics">SkyYouth Analytics</button>
+      </nav>
       <a class="nav-help" href="/docs/guide.html" target="_blank" rel="noopener noreferrer">? Help</a>
-    </nav>
+    </div>
     <svg class="hero-banner" viewBox="0 0 1000 60" preserveAspectRatio="none" aria-hidden="true">
       <path class="hero-skyline" d="M0,60 L0,48 L18,48 L18,40 L34,40 L34,52 L54,52 L54,26 L70,26 L70,44 L92,44 L92,16 L112,16 L112,44 L132,44 L132,35 L152,35 L152,50 L178,50 L178,20 L198,20 L198,50 L1000,50 L1000,60 Z"></path>
       <path class="hero-pulse-line" d="M0,32 H360 L374,32 L386,12 L398,48 L410,20 L422,32 H478 L494,32 L498,8 L502,8 L506,32 H1000"></path>
