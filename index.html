@@ -51,7 +51,7 @@
   .theme-toggle,.btn-primary,.btn-secondary{height:44px;border-radius:6px;}
   .theme-toggle{width:44px;}
   .btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--pew);color:var(--paper);border:none;padding:0 20px;font-size:15px;font-weight:600;box-shadow:0 2px 0 rgba(0,0,0,.15);white-space:nowrap;}
-  .page-toggle{display:flex;gap:6px;margin-top:24px;}
+  .page-toggle{display:flex;flex-wrap:wrap;gap:6px;margin-top:24px;}
   .page-toggle-btn{border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:8px 20px;font-size:13px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;border-radius:20px;}
   .page-toggle-btn.active{background:var(--brass);color:var(--paper);border-color:var(--brass);}
   .nav-row{display:flex;align-items:center;gap:4px;margin-top:14px;}
@@ -69,6 +69,7 @@
   @media (prefers-reduced-motion: reduce){
     a.nav-help.draw-attention{animation:none;}
   }
+  .nav-row.page-hidden{display:none;}
   /* Services tab is hidden now that Planning Center is the primary logging
      path — the "+ Log a Service" header button still opens the same modal
      as a manual fallback (e.g. events with no matching PCO plan), and
@@ -111,6 +112,20 @@
   .export-actions{display:flex;flex-direction:column;gap:10px;}
   .export-actions .btn-secondary{width:100%;justify-content:flex-start;}
   @media (max-width:640px){ .export-grid{grid-template-columns:1fr;} }
+
+  .logo-btn{background:none;border:none;padding:0;cursor:pointer;}
+  .home-hero{background:var(--brass-soft);border:1px solid var(--line);border-radius:8px;padding:32px 28px;margin-bottom:24px;}
+  .home-hero-kicker{color:var(--brass);font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;}
+  .home-hero h2{margin:0 0 8px;font-size:28px;}
+  .home-hero p{margin:0;color:var(--muted);font-size:15px;max-width:560px;}
+  .home-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin:24px 0;}
+  .home-card{text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:20px;cursor:pointer;transition:border-color .15s ease,transform .15s ease;font-family:inherit;}
+  .home-card:hover{border-color:var(--pew);transform:translateY(-2px);}
+  .home-card-icon{font-size:24px;margin-bottom:10px;}
+  .home-card-title{font-family:'Fraunces',Georgia,serif;font-size:17px;margin-bottom:4px;}
+  .home-card-desc{color:var(--muted);font-size:13px;line-height:1.4;margin-bottom:10px;}
+  .home-card-count{color:var(--brass);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;}
+  @media (max-width:640px){ .home-cards{grid-template-columns:1fr;} }
   table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);}
   thead th{text-align:left;padding:13px 20px;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--zebra);}
   thead th.num,tbody td.num{text-align:right;}
@@ -260,9 +275,9 @@
 <header>
   <div class="wrap">
     <div class="headtop">
-      <div>
+      <button class="logo-btn" id="logo-btn" title="Go to Home">
         <img class="logo" id="logo-img" src="assets/SkylinePulseLight-removebg-preview.png" alt="Skyline Pulse">
-      </div>
+      </button>
       <div style="display:flex;align-items:center;gap:10px;">
         <button class="theme-toggle" id="theme-toggle" title="Cycle theme (Light / Dark / Ocean)"></button>
         <button class="btn-secondary" id="open-production-form-btn">+ Log Production</button>
@@ -270,7 +285,8 @@
       </div>
     </div>
     <div class="page-toggle">
-      <button class="page-toggle-btn active" id="page-logging">Logging</button>
+      <button class="page-toggle-btn active" id="page-home">Home</button>
+      <button class="page-toggle-btn" id="page-logging">Logging</button>
       <button class="page-toggle-btn" id="page-analytics">Analytics</button>
       <button class="page-toggle-btn" id="page-exports">Exports</button>
     </div>
@@ -363,8 +379,8 @@ const ANALYTICS_VIEWS = ["analytics", "production-analytics", "skyyouth-analytic
 let sb = null;
 let entries = [];
 let productionEntries = [];
-let view = "pco";
-let page = "logging";
+let view = "home";
+let page = "home";
 let lastLoggingView = "pco";
 let lastAnalyticsView = "analytics";
 let charts = [];
@@ -470,6 +486,7 @@ function applyTheme(theme) {
   document.getElementById("theme-toggle").textContent = THEME_ICONS[theme];
   document.getElementById("logo-img").src = theme === "light" ? LOGO_LIGHT : LOGO_DARK;
   if (view === "analytics" && charts.length) { destroyCharts(); renderCharts(); }
+  if (view === "home" && charts.length) { destroyCharts(); renderHomeChart(); }
 }
 function toggleTheme() {
   const current = document.documentElement.getAttribute("data-theme");
@@ -588,7 +605,8 @@ function printReport(targetView) {
 
 function setView(v) {
   view = v;
-  if (LOGGING_VIEWS.includes(v)) { page = "logging"; lastLoggingView = v; }
+  if (v === "home") { page = "home"; }
+  else if (LOGGING_VIEWS.includes(v)) { page = "logging"; lastLoggingView = v; }
   else if (ANALYTICS_VIEWS.includes(v)) { page = "analytics"; lastAnalyticsView = v; }
   else if (v === "exports") { page = "exports"; }
   render();
@@ -604,11 +622,13 @@ function render() {
   document.getElementById("tab-production").classList.toggle("active", view === "production");
   document.getElementById("tab-production-analytics").classList.toggle("active", view === "production-analytics");
   document.getElementById("tab-skyyouth-analytics").classList.toggle("active", view === "skyyouth-analytics");
+  document.getElementById("page-home").classList.toggle("active", page === "home");
   document.getElementById("page-logging").classList.toggle("active", page === "logging");
   document.getElementById("page-analytics").classList.toggle("active", page === "analytics");
   document.getElementById("page-exports").classList.toggle("active", page === "exports");
   LOGGING_VIEWS.forEach(v => document.getElementById(`tab-${v}`).classList.toggle("page-hidden", page !== "logging"));
   ANALYTICS_VIEWS.forEach(v => document.getElementById(`tab-${v}`).classList.toggle("page-hidden", page !== "analytics"));
+  document.querySelector(".nav-row").classList.toggle("page-hidden", page === "home");
   destroyCharts();
 
   if (!configured()) {
@@ -619,6 +639,14 @@ function render() {
     return;
   } else {
     document.getElementById("config-slot").innerHTML = "";
+  }
+
+  if (view === "home") {
+    content.innerHTML = renderHome();
+    wireHomeHandlers(content);
+    renderHomeChart();
+    if (!pcoLoaded) loadPcoPlans();
+    return;
   }
 
   if (view === "pco") {
@@ -957,6 +985,104 @@ function exportProductionPDF() {
     ]),
   });
   doc.save(`skyline-pulse-production-${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
+// The landing page — a welcoming overview with headline stats and a jump-off
+// point into every tab, rather than dropping people straight into a work
+// queue. Falls back gracefully (empty state, no chart) before any data has
+// loaded or been logged yet.
+const HOME_CARDS = [
+  { view: "pco", icon: "🗓️", title: "Sunday Services", desc: "Log attendance, unity, engagement, and flow for this week's services.", countOf: () => `${entries.filter(e => e.service_type !== "SkyYouth").length} logged` },
+  { view: "production", icon: "🎛️", title: "Production", desc: "Role attendance and a slides fit-check for the tech team.", countOf: () => `${productionEntries.length} logged` },
+  { view: "skyyouth", icon: "🎧", title: "SkyYouth", desc: "SkyYouth's own Planning Center feed and ledger.", countOf: () => `${skyYouthEntries().length} logged` },
+  { view: "calendar", icon: "📅", title: "Calendar", desc: "See what's logged and what's still needed, by day or month.", countOf: null },
+  { view: "analytics", icon: "📈", title: "Analytics", desc: "Trends for Services, Production, and SkyYouth over time.", countOf: null },
+  { view: "exports", icon: "⬇️", title: "Exports", desc: "CSV, PDF tables, or print-ready reports for any dataset.", countOf: null },
+];
+
+function renderHome() {
+  const sundayEntries = entries.filter(e => e.service_type !== "SkyYouth");
+  const hasAnyData = entries.length > 0 || productionEntries.length > 0;
+  const today = new Date().toISOString().slice(0, 10);
+  const upcomingCount = pcoPlans.filter(p => p.sort_date.slice(0, 10) > today).length;
+
+  const avgAttendance = avg(sundayEntries.map(e => e.attendance));
+  const avgUnity = avg(sundayEntries.map(e => e.unity));
+  const avgEngagement = avg(sundayEntries.map(e => e.engagement));
+
+  const recent = [...entries.map(e => ({ ...e, kind: "Service" })), ...productionEntries.map(e => ({ ...e, kind: "Production" }))]
+    .filter(e => e.created_at)
+    .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
+    .slice(0, 5);
+
+  return `
+    <div class="home-hero">
+      <div class="home-hero-kicker">Skyline Church · NJ</div>
+      <h2 class="display">Welcome to Skyline Pulse</h2>
+      <p>Your weekly snapshot for how service actually went — logged in under a minute, pulled straight from Planning Center.</p>
+    </div>
+
+    <div class="stats">
+      <div class="pill"><div class="label">Services Logged</div><div class="value">${sundayEntries.length}</div></div>
+      <div class="pill"><div class="label">SkyYouth Logged</div><div class="value">${skyYouthEntries().length}</div></div>
+      <div class="pill"><div class="label">Production Logged</div><div class="value">${productionEntries.length}</div></div>
+      <div class="pill"><div class="label">Upcoming Plans</div><div class="value">${upcomingCount}</div></div>
+    </div>
+    ${sundayEntries.length ? `
+    <div class="stats">
+      <div class="pill"><div class="label">Avg Attendance</div><div class="value">${avgAttendance.toFixed(0)}</div></div>
+      <div class="pill"><div class="label">Avg Unity</div><div class="value">${avgUnity.toFixed(1)}<span>/5</span></div></div>
+      <div class="pill"><div class="label">Avg Engagement</div><div class="value">${avgEngagement.toFixed(1)}<span>/5</span></div></div>
+    </div>` : ""}
+
+    ${sundayEntries.length >= 2 ? `<div class="card"><h3 class="display">Attendance Trend</h3><div class="chart-box" style="height:200px;"><canvas id="chart-home-attendance"></canvas></div></div>` : ""}
+
+    <div class="home-cards">
+      ${HOME_CARDS.map(c => `
+        <button class="home-card" data-view="${c.view}">
+          <div class="home-card-icon">${c.icon}</div>
+          <div class="home-card-title">${escapeHtml(c.title)}</div>
+          <div class="home-card-desc">${escapeHtml(c.desc)}</div>
+          ${c.countOf ? `<div class="home-card-count">${escapeHtml(c.countOf())}</div>` : ""}
+        </button>
+      `).join("")}
+    </div>
+
+    ${recent.length ? `
+    <div class="card">
+      <h3 class="display">Recently Logged</h3>
+      <div class="logger-list" style="border-top:none;padding-top:0;">
+        ${recent.map(e => `<div class="logger-row"><span class="logger-name">${escapeHtml(e.service_type)} <span style="color:var(--muted);font-weight:400;">· ${e.kind}</span></span><span class="logger-meta">${fmtDate(e.service_date)}${e.logged_by ? " · " + escapeHtml(e.logged_by) : ""}</span></div>`).join("")}
+      </div>
+    </div>` : !hasAnyData ? `
+    <div class="empty">
+      <div class="display">Nothing logged yet — let's fix that.</div>
+      <div>Head into Sunday Services and log this week's numbers to get started.</div>
+    </div>` : ""}
+  `;
+}
+
+function wireHomeHandlers(content) {
+  content.querySelectorAll(".home-card").forEach(btn => {
+    btn.addEventListener("click", () => setView(btn.dataset.view));
+  });
+}
+
+function renderHomeChart() {
+  const el = document.getElementById("chart-home-attendance");
+  if (!el) return;
+  const sorted = entries.filter(e => e.service_type !== "SkyYouth").sort((a, b) => a.service_date.localeCompare(b.service_date)).slice(-8);
+  if (sorted.length < 2) return;
+  const labels = sorted.map(e => fmtDate(e.service_date));
+  const t = themeColors();
+  Chart.defaults.color = t.ink;
+  Chart.defaults.borderColor = t.line;
+  const c = new Chart(el, {
+    type: "line",
+    data: { labels, datasets: [{ label: "Attendance", data: sorted.map(e => e.attendance), borderColor: t.pew, backgroundColor: t.pew, tension: .3, fill: false }] },
+    options: { plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: t.line } } } },
+  });
+  charts.push(c);
 }
 
 function renderExports() {
@@ -1838,9 +1964,11 @@ document.getElementById("tab-skyyouth").addEventListener("click", () => setView(
 document.getElementById("tab-production").addEventListener("click", () => setView("production"));
 document.getElementById("tab-production-analytics").addEventListener("click", () => setView("production-analytics"));
 document.getElementById("tab-skyyouth-analytics").addEventListener("click", () => setView("skyyouth-analytics"));
+document.getElementById("page-home").addEventListener("click", () => setView("home"));
 document.getElementById("page-logging").addEventListener("click", () => setView(lastLoggingView));
 document.getElementById("page-analytics").addEventListener("click", () => setView(lastAnalyticsView));
 document.getElementById("page-exports").addEventListener("click", () => setView("exports"));
+document.getElementById("logo-btn").addEventListener("click", () => setView("home"));
 document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
 document.getElementById("footer-year").textContent = new Date().getFullYear();
 
