@@ -264,7 +264,7 @@
       <button class="page-toggle-btn" id="page-exports">Exports</button>
     </div>
     <nav>
-      <button id="tab-pco" class="active">Planning Center</button>
+      <button id="tab-pco" class="active">Sunday Services</button>
       <button id="tab-production">Production</button>
       <button id="tab-skyyouth">SkyYouth</button>
       <!-- Hidden via #tab-log{display:none} in <style> — see comment there. -->
@@ -1364,7 +1364,7 @@ function renderPcoSection(plans, filterState, opts) {
 
 function renderPco() {
   return renderPcoSection(pcoPlans.filter(p => !isSkyYouthPlan(p)), pcoFilterTypes, {
-    title: "Planning Center — Plans",
+    title: "Sunday Services — Plans",
     subtitle: "Pulled live from your Services Service Types. Log Pulse details for any plan below.",
     emptyTitle: "No plans found.",
     emptyBody: "Nothing scheduled in the last 14 days or next 45 days across your Service Types.",
