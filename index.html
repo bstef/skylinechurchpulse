@@ -59,8 +59,16 @@
   nav button{padding:9px 18px;border:none;background:transparent;color:var(--ink);font-size:14px;font-weight:600;border-radius:3px 3px 0 0;white-space:nowrap;flex-shrink:0;}
   nav button.active{background:var(--ink);color:var(--paper);}
   nav button.page-hidden{display:none;}
-  a.nav-help{padding:9px 14px;color:var(--muted);text-decoration:none;font-size:13px;font-weight:600;white-space:nowrap;flex-shrink:0;}
+  a.nav-help{padding:8px 13px;color:var(--muted);text-decoration:none;font-size:13px;font-weight:600;white-space:nowrap;flex-shrink:0;border:1px solid transparent;border-radius:20px;}
   a.nav-help:hover{color:var(--pew);}
+  a.nav-help.draw-attention{animation:nav-help-pulse 2.2s ease-in-out infinite;}
+  @keyframes nav-help-pulse{
+    0%, 100% { border-color:transparent; background:transparent; }
+    50% { border-color:var(--brass); background:var(--brass-soft); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    a.nav-help.draw-attention{animation:none;}
+  }
   /* Services tab is hidden now that Planning Center is the primary logging
      path — the "+ Log a Service" header button still opens the same modal
      as a manual fallback (e.g. events with no matching PCO plan), and
@@ -278,7 +286,7 @@
         <button id="tab-production-analytics">Production Analytics</button>
         <button id="tab-skyyouth-analytics">SkyYouth Analytics</button>
       </nav>
-      <a class="nav-help" href="/docs/guide.html" target="_blank" rel="noopener noreferrer">Help</a>
+      <a class="nav-help" id="nav-help" href="/docs/guide.html" target="_blank" rel="noopener noreferrer">Help</a>
     </div>
     <svg class="hero-banner" viewBox="0 0 1000 60" preserveAspectRatio="none" aria-hidden="true">
       <path class="hero-skyline" d="M0,60 L0,48 L18,48 L18,40 L34,40 L34,52 L54,52 L54,26 L70,26 L70,44 L92,44 L92,16 L112,16 L112,44 L132,44 L132,35 L152,35 L152,50 L178,50 L178,20 L198,20 L198,50 L1000,50 L1000,60 Z"></path>
@@ -1835,6 +1843,18 @@ document.getElementById("page-analytics").addEventListener("click", () => setVie
 document.getElementById("page-exports").addEventListener("click", () => setView("exports"));
 document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
 document.getElementById("footer-year").textContent = new Date().getFullYear();
+
+// Gently pulse the Help link's border until someone's actually clicked it
+// once, so it's easy to spot the first few times without flashing forever
+// for people who already know where it is.
+const navHelp = document.getElementById("nav-help");
+if (!localStorage.getItem("skyline-help-seen")) {
+  navHelp.classList.add("draw-attention");
+}
+navHelp.addEventListener("click", () => {
+  localStorage.setItem("skyline-help-seen", "1");
+  navHelp.classList.remove("draw-attention");
+});
 
 applyTheme(getStoredTheme());
 
