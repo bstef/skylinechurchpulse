@@ -287,6 +287,7 @@
       <button class="page-toggle-btn active" id="page-home">Home</button>
       <button class="page-toggle-btn" id="page-logging">Logging</button>
       <button class="page-toggle-btn" id="page-analytics">Analytics</button>
+      <button class="page-toggle-btn" id="page-church-stats">Church Stats</button>
       <button class="page-toggle-btn" id="page-exports">Exports</button>
     </div>
     <div class="nav-row">
@@ -394,6 +395,10 @@ let skyYouthFilterTypes = new Set();
 let calendarMonth = null;
 let calendarView = "day";
 let calendarDay = null;
+let churchStats = null;
+let churchStatsError = null;
+let churchStatsLoaded = false;
+let churchStatsLoading = false;
 
 function dateKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -486,6 +491,7 @@ function applyTheme(theme) {
   document.getElementById("logo-img").src = theme === "light" ? LOGO_LIGHT : LOGO_DARK;
   if (view === "analytics" && charts.length) { destroyCharts(); renderCharts(); }
   if (view === "home" && charts.length) { destroyCharts(); renderHomeChart(); }
+  if (view === "church-stats" && charts.length) { destroyCharts(); renderChurchStatsChart(); }
 }
 function toggleTheme() {
   const current = document.documentElement.getAttribute("data-theme");
@@ -607,6 +613,7 @@ function setView(v) {
   if (v === "home") { page = "home"; }
   else if (LOGGING_VIEWS.includes(v)) { page = "logging"; lastLoggingView = v; }
   else if (ANALYTICS_VIEWS.includes(v)) { page = "analytics"; lastAnalyticsView = v; }
+  else if (v === "church-stats") { page = "church-stats"; }
   else if (v === "exports") { page = "exports"; }
   render();
 }
@@ -624,6 +631,7 @@ function render() {
   document.getElementById("page-home").classList.toggle("active", page === "home");
   document.getElementById("page-logging").classList.toggle("active", page === "logging");
   document.getElementById("page-analytics").classList.toggle("active", page === "analytics");
+  document.getElementById("page-church-stats").classList.toggle("active", page === "church-stats");
   document.getElementById("page-exports").classList.toggle("active", page === "exports");
   LOGGING_VIEWS.forEach(v => document.getElementById(`tab-${v}`).classList.toggle("page-hidden", page !== "logging"));
   ANALYTICS_VIEWS.forEach(v => document.getElementById(`tab-${v}`).classList.toggle("page-hidden", page !== "analytics"));
@@ -644,6 +652,15 @@ function render() {
     wireHomeHandlers(content);
     renderHomeChart();
     if (!pcoLoaded) loadPcoPlans();
+    return;
+  }
+
+  if (view === "church-stats") {
+    content.innerHTML = renderChurchStats();
+    const refreshBtn = document.getElementById("church-stats-refresh");
+    if (refreshBtn) refreshBtn.addEventListener("click", () => loadChurchStats(true));
+    renderChurchStatsChart();
+    if (!churchStatsLoaded) loadChurchStats();
     return;
   }
 
@@ -1082,6 +1099,91 @@ function renderHomeChart() {
   charts.push(c);
 }
 
+function statsErrorMessage(err) {
+  if (err.status === 401 || err.status === 403) {
+    return "Not available — this token doesn't have access to this part of Planning Center.";
+  }
+  if (err.status === 404) {
+    return "Not available — this organization may not have this product enabled.";
+  }
+  if (err.status) return `Planning Center request failed (status ${err.status}).`;
+  return "Couldn't reach Planning Center: " + escapeHtml((err && err.message) || "unknown error");
+}
+
+function renderStatsSection(title, data, bodyFn) {
+  if (!data || data.error) {
+    return `<div class="card"><h3 class="display">${title}</h3><div class="error-banner">${statsErrorMessage((data && data.error) || {})}</div></div>`;
+  }
+  return `<div class="card"><h3 class="display" style="margin-bottom:12px;">${title}</h3>${bodyFn(data)}</div>`;
+}
+
+function renderChurchStats() {
+  const header = `<div class="pco-header">
+    <div>
+      <h3 class="display" style="margin:0 0 4px;">Church Stats</h3>
+      <div style="color:var(--muted);font-size:13px;">Org-wide numbers pulled directly from Planning Center — Check-Ins, People, and Serving.</div>
+    </div>
+    <button class="btn-secondary" id="church-stats-refresh" ${churchStatsLoading ? "disabled" : ""}>${churchStatsLoading ? "↻ Refreshing…" : "↻ Refresh"}</button>
+  </div>`;
+
+  if (!churchStatsLoaded) {
+    return `${header}<div class="empty"><div class="display">Loading Church Stats…</div></div>`;
+  }
+  if (churchStatsError) {
+    return `${header}<div class="error-banner">${escapeHtml(churchStatsError)}</div>`;
+  }
+
+  const { checkins, people, serving } = churchStats;
+
+  const checkinsSection = renderStatsSection("Check-Ins Trends", checkins, (c) => `
+    <div class="stats">
+      <div class="pill"><div class="label">Regular Attendance</div><div class="value">${c.total_regular.toLocaleString()}</div></div>
+      <div class="pill"><div class="label">Guests</div><div class="value">${c.total_guest.toLocaleString()}</div></div>
+    </div>
+    ${c.trend.length >= 2 ? `<div class="chart-box" style="height:220px;margin-top:16px;"><canvas id="chart-church-checkins"></canvas></div>` : ""}
+  `);
+
+  const peopleSection = renderStatsSection("People &amp; Membership", people, (p) => `
+    <div class="stats">
+      <div class="pill"><div class="label">Active People</div><div class="value">${p.total_people != null ? p.total_people.toLocaleString() : "—"}</div></div>
+      <div class="pill"><div class="label">Households</div><div class="value">${p.total_households != null ? p.total_households.toLocaleString() : "—"}</div></div>
+      <div class="pill"><div class="label">New, Last 30 Days</div><div class="value">${p.new_people != null ? p.new_people.toLocaleString() : "—"}</div></div>
+    </div>
+  `);
+
+  const servingSection = renderStatsSection("Serving &amp; Volunteers", serving, (s) => `
+    <div class="stats">
+      <div class="pill"><div class="label">Volunteers Scheduled</div><div class="value">${s.volunteers_scheduled}</div></div>
+      <div class="pill"><div class="label">Needs Confirmation</div><div class="value">${s.needs_attention}</div></div>
+      <div class="pill"><div class="label">Upcoming Plans</div><div class="value">${s.upcoming_plans}</div></div>
+    </div>
+    ${s.top_volunteers.length ? `
+    <div class="logger-list">
+      <div style="font-weight:600;font-size:13px;color:var(--muted);margin-bottom:6px;">Most scheduled, next 3 weeks</div>
+      ${s.top_volunteers.map(v => `<div class="logger-row"><span class="logger-name">${escapeHtml(v.name)}</span><span class="logger-meta">${v.count} signup${v.count === 1 ? "" : "s"}</span></div>`).join("")}
+    </div>` : ""}
+  `);
+
+  return `${header}${checkinsSection}${peopleSection}${servingSection}`;
+}
+
+function renderChurchStatsChart() {
+  const el = document.getElementById("chart-church-checkins");
+  if (!el || !churchStats || !churchStats.checkins || churchStats.checkins.error) return;
+  const trend = churchStats.checkins.trend || [];
+  if (trend.length < 2) return;
+  const labels = trend.map(d => fmtDate(d.date));
+  const t = themeColors();
+  Chart.defaults.color = t.ink;
+  Chart.defaults.borderColor = t.line;
+  const c = new Chart(el, {
+    type: "bar",
+    data: { labels, datasets: [{ label: "Attendance", data: trend.map(d => d.total), backgroundColor: t.pew, borderRadius: 3 }] },
+    options: { plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: t.line } } } },
+  });
+  charts.push(c);
+}
+
 function renderExports() {
   return `
     <div class="pco-header">
@@ -1390,6 +1492,30 @@ async function loadPcoPlans(force) {
   }
   pcoLoading = false;
   pcoLoaded = true;
+  render();
+}
+
+async function loadChurchStats(force) {
+  if (churchStatsLoading) return;
+  if (!force && churchStatsLoaded) return;
+  churchStatsLoading = true;
+  churchStatsError = null;
+  if (force) render();
+  try {
+    const res = await fetch("/api/pco-stats");
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      churchStatsError = body.error || `Church stats request failed (${res.status}).`;
+      churchStats = null;
+    } else {
+      churchStats = body;
+    }
+  } catch (err) {
+    churchStatsError = "Couldn't reach Planning Center: " + err.message;
+    churchStats = null;
+  }
+  churchStatsLoading = false;
+  churchStatsLoaded = true;
   render();
 }
 
@@ -1964,6 +2090,7 @@ document.getElementById("tab-skyyouth-analytics").addEventListener("click", () =
 document.getElementById("page-home").addEventListener("click", () => setView("home"));
 document.getElementById("page-logging").addEventListener("click", () => setView(lastLoggingView));
 document.getElementById("page-analytics").addEventListener("click", () => setView(lastAnalyticsView));
+document.getElementById("page-church-stats").addEventListener("click", () => setView("church-stats"));
 document.getElementById("page-exports").addEventListener("click", () => setView("exports"));
 document.getElementById("logo-btn").addEventListener("click", () => setView("home"));
 document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
