@@ -69,7 +69,6 @@
   @media (prefers-reduced-motion: reduce){
     a.nav-help.draw-attention{animation:none;}
   }
-  .nav-row.page-hidden{display:none;}
   /* Services tab is hidden now that Planning Center is the primary logging
      path — the "+ Log a Service" header button still opens the same modal
      as a manual fallback (e.g. events with no matching PCO plan), and
@@ -628,7 +627,6 @@ function render() {
   document.getElementById("page-exports").classList.toggle("active", page === "exports");
   LOGGING_VIEWS.forEach(v => document.getElementById(`tab-${v}`).classList.toggle("page-hidden", page !== "logging"));
   ANALYTICS_VIEWS.forEach(v => document.getElementById(`tab-${v}`).classList.toggle("page-hidden", page !== "analytics"));
-  document.querySelector(".nav-row").classList.toggle("page-hidden", page === "home");
   destroyCharts();
 
   if (!configured()) {
@@ -1003,8 +1001,7 @@ const HOME_CARDS = [
 function renderHome() {
   const sundayEntries = entries.filter(e => e.service_type !== "SkyYouth");
   const hasAnyData = entries.length > 0 || productionEntries.length > 0;
-  const today = new Date().toISOString().slice(0, 10);
-  const upcomingCount = pcoPlans.filter(p => p.sort_date.slice(0, 10) > today).length;
+  const upcomingCount = pcoPlans.filter(p => new Date(p.sort_date).getTime() > Date.now()).length;
 
   const avgAttendance = avg(sundayEntries.map(e => e.attendance));
   const avgUnity = avg(sundayEntries.map(e => e.unity));
