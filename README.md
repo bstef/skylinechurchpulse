@@ -168,6 +168,8 @@ Service Type folder names in Planning Center won't necessarily match Pulse's fix
 
 **Church Stats page (optional, no extra setup):** the **Church Stats** page (`functions/api/pco-stats.js`) pulls org-wide numbers straight from Planning Center — an 8-week Check-Ins attendance trend, People/membership counts (active people, households, new people in the last 30 days), and Serving/volunteer scheduling for the next 3 weeks (who's signed up, who hasn't confirmed, and a "most scheduled" list). Each of the three sections is fetched and reported independently, so if the token only has access to some of these (e.g. Check-Ins but not People), the sections it can't reach just show a small "not available" note instead of breaking the page. This intentionally does **not** touch Planning Center **Giving** — this app has no login, so anything shown here is visible to anyone with the shared link, and financial data doesn't belong in that exposure model without real access control in front of it.
 
+**Serving Responses tab (optional, no extra setup):** the **Serving** tab (under Logging) drills into the same Serving data one level deeper than Church Stats' summary — one card per upcoming Plan, showing exactly who's **Needs Response**, **Declined**, or **Confirmed** for that plan's team, so you don't have to dig through Planning Center's own matrix view to find who hasn't answered yet. It shares `churchStats.serving` with the Church Stats page (`serving.plans`), so it's fetched once and both views stay in sync.
+
 ### 5. (Optional) Custom domain
 In the Pages project → **Custom domains** → add something like `pulse.skylinechurchnj.org` if you own that domain and it's on Cloudflare DNS.
 

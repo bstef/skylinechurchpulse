@@ -221,6 +221,12 @@
   .status-pill{border:none;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:700;letter-spacing:.02em;white-space:nowrap;}
   .status-logged{background:var(--pew);color:var(--paper);}
   .status-pending{background:var(--brass-soft);color:var(--brass);border:1px solid var(--brass);}
+  .status-declined{background:var(--banner-bg);color:var(--rust);border:1px solid var(--rust);}
+  .serving-group{margin-bottom:16px;}
+  .serving-group:last-child{margin-bottom:0;}
+  .serving-group-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);margin-bottom:8px;}
+  .serving-people{display:flex;flex-wrap:wrap;gap:8px;}
+  .serving-position{opacity:.75;font-weight:400;}
   .status-pill:disabled{opacity:.5;cursor:not-allowed;}
   .pco-status-group{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;}
   .pco-plan-cell{display:flex;align-items:center;gap:10px;}
@@ -295,6 +301,7 @@
         <button id="tab-pco" class="active">Sunday Services</button>
         <button id="tab-production">Production</button>
         <button id="tab-skyyouth">SkyYouth</button>
+        <button id="tab-serving">Serving</button>
         <!-- Hidden via #tab-log{display:none} in <style> — see comment there. -->
         <button id="tab-log">Services</button>
         <button id="tab-calendar">Calendar</button>
@@ -373,7 +380,7 @@ const PRODUCTION_ROLES = [
   { key: "audio", label: "Audio" },
 ];
 
-const LOGGING_VIEWS = ["pco", "production", "skyyouth", "calendar", "log"];
+const LOGGING_VIEWS = ["pco", "production", "skyyouth", "serving", "calendar", "log"];
 const ANALYTICS_VIEWS = ["analytics", "production-analytics", "skyyouth-analytics"];
 
 let sb = null;
@@ -625,6 +632,7 @@ function render() {
   document.getElementById("tab-analytics").classList.toggle("active", view === "analytics");
   document.getElementById("tab-pco").classList.toggle("active", view === "pco");
   document.getElementById("tab-skyyouth").classList.toggle("active", view === "skyyouth");
+  document.getElementById("tab-serving").classList.toggle("active", view === "serving");
   document.getElementById("tab-production").classList.toggle("active", view === "production");
   document.getElementById("tab-production-analytics").classList.toggle("active", view === "production-analytics");
   document.getElementById("tab-skyyouth-analytics").classList.toggle("active", view === "skyyouth-analytics");
@@ -652,6 +660,7 @@ function render() {
     wireHomeHandlers(content);
     renderHomeChart();
     if (!pcoLoaded) loadPcoPlans();
+    if (!churchStatsLoaded) loadChurchStats();
     return;
   }
 
@@ -660,6 +669,14 @@ function render() {
     const refreshBtn = document.getElementById("church-stats-refresh");
     if (refreshBtn) refreshBtn.addEventListener("click", () => loadChurchStats(true));
     renderChurchStatsChart();
+    if (!churchStatsLoaded) loadChurchStats();
+    return;
+  }
+
+  if (view === "serving") {
+    content.innerHTML = renderServingResponses();
+    const servingRefreshBtn = document.getElementById("serving-refresh");
+    if (servingRefreshBtn) servingRefreshBtn.addEventListener("click", () => loadChurchStats(true));
     if (!churchStatsLoaded) loadChurchStats();
     return;
   }
@@ -1010,6 +1027,10 @@ const HOME_CARDS = [
   { view: "pco", icon: "🗓️", title: "Sunday Services", desc: "Log attendance, unity, engagement, and flow for this week's services.", countOf: () => `${entries.filter(e => e.service_type !== "SkyYouth").length} logged` },
   { view: "production", icon: "🎛️", title: "Production", desc: "Role attendance and a slides fit-check for the tech team.", countOf: () => `${productionEntries.length} logged` },
   { view: "skyyouth", icon: "🎧", title: "SkyYouth", desc: "SkyYouth's own Planning Center feed and ledger.", countOf: () => `${skyYouthEntries().length} logged` },
+  { view: "serving", icon: "🙋", title: "Serving Responses", desc: "Who's confirmed, declined, or hasn't answered yet — per upcoming plan.", countOf: () => {
+    const n = churchStats && churchStats.serving && !churchStats.serving.error ? churchStats.serving.needs_attention : null;
+    return n != null ? `${n} awaiting response` : "From Planning Center";
+  } },
   { view: "calendar", icon: "📅", title: "Calendar", desc: "See what's logged and what's still needed, by day or month.", countOf: null },
   { view: "analytics", icon: "📈", title: "Analytics", desc: "Trends for Services, Production, and SkyYouth over time.", countOf: null },
   { view: "exports", icon: "⬇️", title: "Exports", desc: "CSV, PDF tables, or print-ready reports for any dataset.", countOf: null },
@@ -1182,6 +1203,66 @@ function renderChurchStatsChart() {
     options: { plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: t.line } } } },
   });
   charts.push(c);
+}
+
+// One card per upcoming Plan with a serving team, grouped by response status
+// — Needs Response first, since that's the actionable list, then Declined,
+// then Confirmed. Same underlying data/fetch as the Church Stats "Serving &
+// Volunteers" summary (churchStats.serving), just shown at full detail
+// instead of top-5-and-a-count.
+function renderServingResponses() {
+  const header = `<div class="pco-header">
+    <div>
+      <h3 class="display" style="margin:0 0 4px;">Serving Responses</h3>
+      <div style="color:var(--muted);font-size:13px;">Who's confirmed, declined, or hasn't answered yet for each upcoming plan — pulled from Planning Center.</div>
+    </div>
+    <button class="btn-secondary" id="serving-refresh" ${churchStatsLoading ? "disabled" : ""}>${churchStatsLoading ? "↻ Refreshing…" : "↻ Refresh"}</button>
+  </div>`;
+
+  if (!churchStatsLoaded) {
+    return `${header}<div class="empty"><div class="display">Loading serving responses…</div></div>`;
+  }
+  if (churchStatsError) {
+    return `${header}<div class="error-banner">${escapeHtml(churchStatsError)}</div>`;
+  }
+
+  const serving = churchStats.serving;
+  if (!serving || serving.error) {
+    return `${header}<div class="error-banner">${statsErrorMessage((serving && serving.error) || {})}</div>`;
+  }
+
+  const plans = serving.plans || [];
+  if (plans.length === 0) {
+    return `${header}<div class="empty">
+      <div class="display">No upcoming plans with a serving team.</div>
+      <div>Nothing scheduled with team signups in the next few weeks.</div>
+    </div>`;
+  }
+
+  const servingGroup = (list, cls, label) => list.length === 0 ? "" : `
+    <div class="serving-group">
+      <div class="serving-group-label">${label} (${list.length})</div>
+      <div class="serving-people">
+        ${list.map(s => `<span class="status-pill ${cls}">${escapeHtml(s.name)}${s.position ? ` <span class="serving-position">· ${escapeHtml(s.position)}</span>` : ""}</span>`).join("")}
+      </div>
+    </div>`;
+
+  const planCards = plans.map(p => {
+    const needsResponse = p.signups.filter(s => s.status !== "C" && s.status !== "D");
+    const declined = p.signups.filter(s => s.status === "D");
+    const confirmed = p.signups.filter(s => s.status === "C");
+    return `<div class="card">
+      <h3 class="display" style="margin-bottom:4px;">${escapeHtml(p.service_type_name)}</h3>
+      <div style="color:var(--muted);font-size:13px;margin-bottom:16px;">${fmtDate(p.sort_date.slice(0, 10))}${p.title && p.title !== p.service_type_name ? " · " + escapeHtml(p.title) : ""}</div>
+      ${p.signups.length === 0 ? `<div class="notes">No one scheduled yet.</div>` : `
+        ${servingGroup(needsResponse, "status-pending", "Needs Response")}
+        ${servingGroup(declined, "status-declined", "Declined")}
+        ${servingGroup(confirmed, "status-logged", "Confirmed")}
+      `}
+    </div>`;
+  }).join("");
+
+  return `${header}${planCards}`;
 }
 
 function renderExports() {
@@ -2084,6 +2165,7 @@ document.getElementById("tab-calendar").addEventListener("click", () => setView(
 document.getElementById("tab-analytics").addEventListener("click", () => setView("analytics"));
 document.getElementById("tab-pco").addEventListener("click", () => setView("pco"));
 document.getElementById("tab-skyyouth").addEventListener("click", () => setView("skyyouth"));
+document.getElementById("tab-serving").addEventListener("click", () => setView("serving"));
 document.getElementById("tab-production").addEventListener("click", () => setView("production"));
 document.getElementById("tab-production-analytics").addEventListener("click", () => setView("production-analytics"));
 document.getElementById("tab-skyyouth-analytics").addEventListener("click", () => setView("skyyouth-analytics"));

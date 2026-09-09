@@ -1,6 +1,7 @@
 // Cloudflare Pages Function — aggregate org-wide Planning Center stats for
-// the "Church Stats" page: Check-Ins attendance trends, People/membership
-// counts, and Serving/volunteer scheduling. Deliberately does NOT touch
+// the "Church Stats" page (Check-Ins attendance trends, People/membership
+// counts, Serving/volunteer scheduling) and the per-plan detail behind the
+// "Serving Responses" tab (`serving.plans`). Deliberately does NOT touch
 // Planning Center Giving — this app has no login, so anyone with the link
 // sees whatever this endpoint returns, and financial data doesn't belong in
 // that exposure model without real access control in front of it.
@@ -149,25 +150,38 @@ async function fetchServingStats(headers) {
       }
       if (!res.ok) return [];
       const body = await res.json();
-      return (body.data || []).map(p => ({ service_type_id: st.id, plan_id: p.id }));
+      return (body.data || []).map(p => ({
+        service_type_id: st.id,
+        service_type_name: st.name,
+        plan_id: p.id,
+        title: p.attributes.title || st.name,
+        sort_date: p.attributes.sort_date,
+      }));
     }));
-    const plans = plansPerType.flat();
+    const plans = plansPerType.flat().sort((a, b) => a.sort_date.localeCompare(b.sort_date));
 
-    const teamMembersPerPlan = await Promise.all(plans.map(async (p) => {
+    // Keep signups grouped per plan (not just flattened) so the Serving
+    // Responses tab can show, for each upcoming plan, exactly who's
+    // confirmed, declined, or still hasn't answered — the thing PCO's own
+    // matrix view buries several clicks deep.
+    const plansWithSignups = await Promise.all(plans.map(async (p) => {
       let res;
       try {
         res = await fetch(`${PCO_SERVICES_BASE}/service_types/${p.service_type_id}/plans/${p.plan_id}/team_members?per_page=100`, { headers });
       } catch (err) {
-        return [];
+        return { ...p, signups: [] };
       }
-      if (!res.ok) return [];
+      if (!res.ok) return { ...p, signups: [] };
       const body = await res.json();
-      return (body.data || []).map(tm => ({
+      const signups = (body.data || []).map(tm => ({
         name: tm.attributes.name || "Unknown",
+        position: tm.attributes.team_position_name || "",
         status: tm.attributes.status, // "C" confirmed, "U" unconfirmed, "D" declined
       }));
+      return { ...p, signups };
     }));
-    const allSignups = teamMembersPerPlan.flat();
+
+    const allSignups = plansWithSignups.flatMap(p => p.signups);
 
     const byName = new Map();
     let needsAttention = 0;
@@ -183,6 +197,13 @@ async function fetchServingStats(headers) {
       volunteers_scheduled: byName.size,
       needs_attention: needsAttention,
       top_volunteers: [...byName.values()].sort((a, b) => b.count - a.count).slice(0, 5),
+      plans: plansWithSignups.map(p => ({
+        plan_id: p.plan_id,
+        service_type_name: p.service_type_name,
+        title: p.title,
+        sort_date: p.sort_date,
+        signups: p.signups,
+      })),
       error: null,
     };
   } catch (err) {
