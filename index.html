@@ -1045,6 +1045,7 @@ function renderHome() {
   const avgAttendance = avg(sundayEntries.map(e => e.attendance));
   const avgUnity = avg(sundayEntries.map(e => e.unity));
   const avgEngagement = avg(sundayEntries.map(e => e.engagement));
+  const serving = churchStats && churchStats.serving && !churchStats.serving.error ? churchStats.serving : null;
 
   const recent = [...entries.map(e => ({ ...e, kind: "Service" })), ...productionEntries.map(e => ({ ...e, kind: "Production" }))]
     .filter(e => e.created_at)
@@ -1063,6 +1064,7 @@ function renderHome() {
       <div class="pill"><div class="label">SkyYouth Logged</div><div class="value">${skyYouthEntries().length}</div></div>
       <div class="pill"><div class="label">Production Logged</div><div class="value">${productionEntries.length}</div></div>
       <div class="pill"><div class="label">Upcoming Plans</div><div class="value">${upcomingCount}</div></div>
+      <div class="pill"><div class="label">Serving — Needs Response</div><div class="value">${serving ? serving.needs_attention : "—"}</div></div>
     </div>
     ${sundayEntries.length ? `
     <div class="stats">
