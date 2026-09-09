@@ -124,10 +124,12 @@ async function fetchPeopleStats(headers) {
 }
 
 // Volunteer scheduling for the next few weeks — who's signed up, who hasn't
-// confirmed, and who's carrying the most of the load. `where[sort_date]`
-// range filtering + ascending order keeps this to exactly the plans in the
-// window (no truncation risk from far-future plans crowding out near-term
-// ones, unlike a plain "latest 25" fetch).
+// confirmed, and who's carrying the most of the load. Uses the same
+// order=-sort_date + per_page=25 + client-side window filter that
+// pco-plans.js already relies on for Plans (proven to surface Sunday
+// Services correctly) rather than a `where[sort_date]` range filter — that
+// filter's exact support/syntax on this endpoint isn't confirmed, and it
+// was silently dropping some service types' plans.
 async function fetchServingStats(headers) {
   try {
     const typesRes = await fetch(`${PCO_SERVICES_BASE}/service_types?per_page=100`, { headers });
@@ -135,28 +137,31 @@ async function fetchServingStats(headers) {
     const typesBody = await typesRes.json();
     const serviceTypes = (typesBody.data || []).map(t => ({ id: t.id, name: t.attributes.name }));
 
-    const nowIso = new Date().toISOString();
-    const windowEndIso = new Date(Date.now() + SERVING_WINDOW_DAYS_FUTURE * 86400000).toISOString();
+    const now = Date.now();
+    const windowEnd = now + SERVING_WINDOW_DAYS_FUTURE * 86400000;
 
     const plansPerType = await Promise.all(serviceTypes.map(async (st) => {
       let res;
       try {
-        res = await fetch(
-          `${PCO_SERVICES_BASE}/service_types/${st.id}/plans?where[sort_date][gte]=${encodeURIComponent(nowIso)}&where[sort_date][lte]=${encodeURIComponent(windowEndIso)}&order=sort_date&per_page=25`,
-          { headers }
-        );
+        res = await fetch(`${PCO_SERVICES_BASE}/service_types/${st.id}/plans?order=-sort_date&per_page=25`, { headers });
       } catch (err) {
         return [];
       }
       if (!res.ok) return [];
       const body = await res.json();
-      return (body.data || []).map(p => ({
-        service_type_id: st.id,
-        service_type_name: st.name,
-        plan_id: p.id,
-        title: p.attributes.title || st.name,
-        sort_date: p.attributes.sort_date,
-      }));
+      return (body.data || [])
+        .filter(p => p.attributes.sort_date)
+        .filter(p => {
+          const t = new Date(p.attributes.sort_date).getTime();
+          return t >= now && t <= windowEnd;
+        })
+        .map(p => ({
+          service_type_id: st.id,
+          service_type_name: st.name,
+          plan_id: p.id,
+          title: p.attributes.title || st.name,
+          sort_date: p.attributes.sort_date,
+        }));
     }));
     const plans = plansPerType.flat().sort((a, b) => a.sort_date.localeCompare(b.sort_date));
 

@@ -163,6 +163,7 @@
   .field{display:flex;flex-direction:column;gap:6px;min-width:0;}
   .field span{font-size:13px;font-weight:600;color:var(--field-label);}
   .field-section-label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--brass);font-weight:700;border-top:1px solid var(--line);padding-top:14px;}
+  .section-divider{font-family:'Fraunces',Georgia,serif;font-size:20px;font-weight:600;margin:32px 0 16px;padding-top:24px;border-top:1px solid var(--line);}
   .field-hint{font-size:12px;color:var(--muted);line-height:1.4;margin-top:-10px;}
   .role-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);}
   .role-row select{width:auto;flex-shrink:0;}
@@ -1247,7 +1248,7 @@ function renderServingResponses() {
       </div>
     </div>`;
 
-  const planCards = plans.map(p => {
+  const planCard = (p) => {
     const needsResponse = p.signups.filter(s => s.status !== "C" && s.status !== "D");
     const declined = p.signups.filter(s => s.status === "D");
     const confirmed = p.signups.filter(s => s.status === "C");
@@ -1260,9 +1261,23 @@ function renderServingResponses() {
         ${servingGroup(confirmed, "status-logged", "Confirmed")}
       `}
     </div>`;
-  }).join("");
+  };
 
-  return `${header}${planCards}`;
+  // Split the same way the rest of the app splits Sunday Services from
+  // SkyYouth (isSkyYouthPlan, by the plan's underlying PCO Service Type),
+  // instead of one flat list where SkyYouth's usually-smaller team can
+  // crowd out or get lost among Sunday's.
+  const sundayPlans = plans.filter(p => !isSkyYouthPlan(p));
+  const skyYouthPlans = plans.filter(isSkyYouthPlan);
+
+  const subsection = (label, list) => `
+    <div class="section-divider">${label}</div>
+    ${list.length === 0
+      ? `<div class="empty" style="padding:32px 20px;"><div>Nothing scheduled with team signups in the next few weeks.</div></div>`
+      : list.map(planCard).join("")}
+  `;
+
+  return `${header}${subsection("Sunday Services", sundayPlans)}${subsection("SkyYouth", skyYouthPlans)}`;
 }
 
 function renderExports() {
