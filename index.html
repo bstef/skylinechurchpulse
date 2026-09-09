@@ -1029,7 +1029,7 @@ const HOME_CARDS = [
   { view: "production", icon: "🎛️", title: "Production", desc: "Role attendance and a slides fit-check for the tech team.", countOf: () => `${productionEntries.length} logged` },
   { view: "skyyouth", icon: "🎧", title: "SkyYouth", desc: "SkyYouth's own Planning Center feed and ledger.", countOf: () => `${skyYouthEntries().length} logged` },
   { view: "serving", icon: "🙋", title: "Serving Responses", desc: "Who's confirmed, declined, or hasn't answered yet — per upcoming plan.", countOf: () => {
-    const n = churchStats && churchStats.serving && !churchStats.serving.error ? churchStats.serving.needs_attention : null;
+    const n = churchStats && churchStats.serving && !churchStats.serving.error ? churchStats.serving.needs_response : null;
     return n != null ? `${n} awaiting response` : "From Planning Center";
   } },
   { view: "calendar", icon: "📅", title: "Calendar", desc: "See what's logged and what's still needed, by day or month.", countOf: null },
@@ -1059,13 +1059,15 @@ function renderHome() {
       <p>See how service actually went — logged in under a minute.</p>
     </div>
 
-    <div class="stats">
+    <div class="stats" style="${serving ? "margin-bottom:8px;" : ""}">
       <div class="pill"><div class="label">Services Logged</div><div class="value">${sundayEntries.length}</div></div>
       <div class="pill"><div class="label">SkyYouth Logged</div><div class="value">${skyYouthEntries().length}</div></div>
       <div class="pill"><div class="label">Production Logged</div><div class="value">${productionEntries.length}</div></div>
       <div class="pill"><div class="label">Upcoming Plans</div><div class="value">${upcomingCount}</div></div>
-      <div class="pill"><div class="label">Serving — Needs Response</div><div class="value">${serving ? serving.needs_attention : "—"}</div></div>
+      <div class="pill"><div class="label">Serving — Responded</div><div class="value">${serving ? serving.responded : "—"}</div></div>
+      <div class="pill"><div class="label">Serving — Needs Response</div><div class="value">${serving ? serving.needs_response : "—"}</div></div>
     </div>
+    ${serving ? `<div class="notes" style="margin-bottom:24px;">${serving.responded} responded + ${serving.needs_response} awaiting response = ${serving.total_signups} total serving signup${serving.total_signups === 1 ? "" : "s"} in the next 3 weeks</div>` : ""}
     ${sundayEntries.length ? `
     <div class="stats">
       <div class="pill"><div class="label">Avg Attendance</div><div class="value">${avgAttendance.toFixed(0)}</div></div>
@@ -1176,11 +1178,13 @@ function renderChurchStats() {
   `);
 
   const servingSection = renderStatsSection("Serving &amp; Volunteers", serving, (s) => `
-    <div class="stats">
+    <div class="stats" style="margin-bottom:8px;">
       <div class="pill"><div class="label">Volunteers Scheduled</div><div class="value">${s.volunteers_scheduled}</div></div>
-      <div class="pill"><div class="label">Needs Confirmation</div><div class="value">${s.needs_attention}</div></div>
       <div class="pill"><div class="label">Upcoming Plans</div><div class="value">${s.upcoming_plans}</div></div>
+      <div class="pill"><div class="label">Responded</div><div class="value">${s.responded}</div></div>
+      <div class="pill"><div class="label">Needs Confirmation</div><div class="value">${s.needs_response}</div></div>
     </div>
+    <div class="notes" style="margin-bottom:20px;">${s.responded} responded + ${s.needs_response} awaiting response = ${s.total_signups} total serving signup${s.total_signups === 1 ? "" : "s"}</div>
     ${s.top_volunteers.length ? `
     <div class="logger-list">
       <div style="font-weight:600;font-size:13px;color:var(--muted);margin-bottom:6px;">Most scheduled, next 3 weeks</div>
