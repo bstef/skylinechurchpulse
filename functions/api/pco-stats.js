@@ -188,10 +188,18 @@ async function fetchServingStats(headers) {
 
     const allSignups = plansWithSignups.flatMap(p => p.signups);
 
+    // Three mutually exclusive buckets by signup status, so confirmed +
+    // declined + needs_response always adds back up to total_signups —
+    // "declined" is a response (just a no), so it belongs with "confirmed"
+    // under responded, not lumped into needs_response.
     const byName = new Map();
-    let needsAttention = 0;
+    let confirmed = 0;
+    let declined = 0;
+    let needsResponse = 0;
     allSignups.forEach(s => {
-      if (s.status !== "C") needsAttention += 1;
+      if (s.status === "C") confirmed += 1;
+      else if (s.status === "D") declined += 1;
+      else needsResponse += 1;
       const cur = byName.get(s.name) || { name: s.name, count: 0 };
       cur.count += 1;
       byName.set(s.name, cur);
@@ -200,7 +208,11 @@ async function fetchServingStats(headers) {
     return {
       upcoming_plans: plans.length,
       volunteers_scheduled: byName.size,
-      needs_attention: needsAttention,
+      total_signups: allSignups.length,
+      confirmed,
+      declined,
+      responded: confirmed + declined,
+      needs_response: needsResponse,
       top_volunteers: [...byName.values()].sort((a, b) => b.count - a.count).slice(0, 5),
       plans: plansWithSignups.map(p => ({
         plan_id: p.plan_id,
