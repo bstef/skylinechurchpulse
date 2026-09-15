@@ -6,8 +6,16 @@
 const PCO_BASE = "https://api.planningcenteronline.com/services/v2";
 const CHECKINS_BASE = "https://api.planningcenteronline.com/check-ins/v2";
 const WINDOW_DAYS_PAST = 14;
+const WINDOW_DAYS_PAST_MAX = 120; // "Load older services" caps out around 4 months back
 const WINDOW_DAYS_FUTURE = 45;
 const CHURCH_TIMEZONE = "America/New_York";
+
+// A wider window (from "Load older services") means more Plans/periods fall
+// inside it, each needing its own artwork/event-time sub-fetch — bound both
+// regardless of window size so a large org can't blow past Cloudflare Pages
+// Functions' per-invocation subrequest limit on an otherwise-ordinary click.
+const MAX_ARTWORK_PROBES = 80;
+const MAX_EVENT_TIME_PROBES = 80;
 
 // PlanTime's own `name` attribute is often left blank in practice, so derive
 // a readable local time (e.g. "9:30 AM") from `starts_at` as a fallback —
@@ -77,7 +85,8 @@ function attendanceTotal(attrs) {
   return (attrs.regular_count || 0) + (attrs.guest_count || 0) + (attrs.volunteer_count || 0);
 }
 
-async function fetchCheckinsPeriods(headers, windowStart, windowEnd) {
+async function fetchCheckinsPeriods(headers, windowStart, windowEnd, periodsPerPage) {
+  const probeBudget = { remaining: MAX_EVENT_TIME_PROBES };
   let eventsRes;
   try {
     eventsRes = await fetch(`${CHECKINS_BASE}/events?per_page=100`, { headers });
@@ -96,7 +105,7 @@ async function fetchCheckinsPeriods(headers, windowStart, windowEnd) {
   const periodsPerEvent = await Promise.all(events.map(async (ev) => {
     let res;
     try {
-      res = await fetch(`${CHECKINS_BASE}/events/${ev.id}/event_periods?order=-starts_at&per_page=25`, { headers });
+      res = await fetch(`${CHECKINS_BASE}/events/${ev.id}/event_periods?order=-starts_at&per_page=${periodsPerPage}`, { headers });
     } catch (err) {
       return [];
     }
@@ -110,13 +119,17 @@ async function fetchCheckinsPeriods(headers, windowStart, windowEnd) {
       });
 
     const candidatesPerPeriod = await Promise.all(periodsInWindow.map(async (period) => {
-      let timesRes;
-      try {
-        timesRes = await fetch(`${CHECKINS_BASE}/events/${ev.id}/event_periods/${period.id}/event_times?per_page=25`, { headers });
-      } catch (err) {
-        timesRes = null;
+      let times = [];
+      if (probeBudget.remaining > 0) {
+        probeBudget.remaining -= 1;
+        let timesRes;
+        try {
+          timesRes = await fetch(`${CHECKINS_BASE}/events/${ev.id}/event_periods/${period.id}/event_times?per_page=25`, { headers });
+        } catch (err) {
+          timesRes = null;
+        }
+        times = timesRes && timesRes.ok ? ((await timesRes.json()).data || []) : [];
       }
-      const times = timesRes && timesRes.ok ? ((await timesRes.json()).data || []) : [];
       const timesWithStart = times.filter(t => t.attributes.starts_at);
 
       if (timesWithStart.length > 0) {
@@ -192,16 +205,26 @@ export async function onRequestGet(context) {
     return json({ error: "Failed to reach Planning Center: " + err.message }, 502);
   }
 
-  const windowStart = Date.now() - WINDOW_DAYS_PAST * 86400000;
+  const url = new URL(context.request.url);
+  const requestedDaysPast = Number(url.searchParams.get("days_past")) || WINDOW_DAYS_PAST;
+  const daysPast = Math.min(Math.max(requestedDaysPast, WINDOW_DAYS_PAST), WINDOW_DAYS_PAST_MAX);
+
+  const windowStart = Date.now() - daysPast * 86400000;
   const windowEnd = Date.now() + WINDOW_DAYS_FUTURE * 86400000;
   const warnings = [];
 
-  const checkinsPromise = fetchCheckinsPeriods(headers, windowStart, windowEnd);
+  // A wider window needs more raw rows fetched to make sure every Plan/
+  // period that falls inside it actually gets returned — services are
+  // usually weekly, so this scales with the window instead of guessing.
+  const perPage = Math.min(100, Math.max(25, Math.ceil((daysPast + WINDOW_DAYS_FUTURE) / 7) + 10));
+
+  const checkinsPromise = fetchCheckinsPeriods(headers, windowStart, windowEnd, perPage);
+  const artworkBudget = { remaining: MAX_ARTWORK_PROBES };
 
   const plansPerType = await Promise.all(serviceTypes.map(async (st) => {
     let res;
     try {
-      res = await fetch(`${PCO_BASE}/service_types/${st.id}/plans?order=-sort_date&per_page=25`, { headers });
+      res = await fetch(`${PCO_BASE}/service_types/${st.id}/plans?order=-sort_date&per_page=${perPage}`, { headers });
     } catch (err) {
       warnings.push({ service_type_name: st.name, error: err.message });
       return [];
@@ -226,8 +249,14 @@ export async function onRequestGet(context) {
         return t >= windowStart && t <= windowEnd;
       });
 
-    // Pull the sermon/series artwork for each plan, if any is attached.
+    // Pull the sermon/series artwork for each plan, if any is attached —
+    // bounded by a shared budget across all service types (see
+    // MAX_ARTWORK_PROBES) so a wide "Load older services" window can't
+    // balloon this into hundreds of subrequests. Plans beyond the budget
+    // just render without artwork.
     await Promise.all(rawPlans.map(async (plan) => {
+      if (artworkBudget.remaining <= 0) return;
+      artworkBudget.remaining -= 1;
       try {
         const seriesRes = await fetch(`${PCO_BASE}/service_types/${st.id}/plans/${plan.plan_id}/series`, { headers });
         if (!seriesRes.ok) return;
@@ -282,7 +311,7 @@ export async function onRequestGet(context) {
   if (checkinsWarning) warnings.push(checkinsWarning);
   plans.forEach(p => { p.attendance_from_pco = matchPcoAttendance(p, checkinsPeriods); });
 
-  return json({ plans, warnings });
+  return json({ plans, warnings, days_past: daysPast, days_past_max: WINDOW_DAYS_PAST_MAX });
 }
 
 function json(body, status = 200) {
