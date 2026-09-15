@@ -56,14 +56,27 @@ const EXCLUDED_SERVICE_TYPES = [
 // represent separate services.
 const MULTI_TIME_SERVICE_TYPES = ["Celebration Service"];
 
-// Planning Center Check-Ins reports headcounts per "event period" (roughly:
-// one calendar occurrence of a Check-Ins Event, usually a whole day/weekend)
-// rather than per individual service time — so a church running 9:30/11:00
-// under one combined Check-Ins Event only gets one combined number back.
-// There's no plan_id on either side to join on, so this pulls every event
-// period in the window and matches it to a Services Plan by same-day date
-// plus best-effort name similarity (falls back to nearest start time). It's
-// a suggestion, not ground truth — the log form always lets you override it.
+// A Check-Ins "event period" is roughly one calendar occurrence of a
+// Check-Ins Event (usually a whole day/weekend) and reports a single
+// combined regular_count/guest_count for it — so a church running 9:30 and
+// 11:00 under one combined Check-Ins Event would get the same whole-day
+// number matched to both Plans. Each period nests "event times" for the
+// actual individual services within it (each with its own counts), so this
+// fetches those per period and only falls back to the period's combined
+// total when no per-service breakdown is available. Prefers total_count
+// when Check-Ins reports one, since — unlike regular_count + guest_count —
+// it also picks up volunteers and any custom Headcount categories a church
+// has configured beyond the standard Regular/Guest/Volunteer types.
+//
+// There's no plan_id on either side to join on, so this then matches each
+// candidate to a Services Plan by same-day date plus best-effort name/time
+// similarity (see matchPcoAttendance). It's a suggestion, not ground truth
+// — the log form always lets you override it.
+function attendanceTotal(attrs) {
+  if (typeof attrs.total_count === "number") return attrs.total_count;
+  return (attrs.regular_count || 0) + (attrs.guest_count || 0) + (attrs.volunteer_count || 0);
+}
+
 async function fetchCheckinsPeriods(headers, windowStart, windowEnd) {
   let eventsRes;
   try {
@@ -89,18 +102,42 @@ async function fetchCheckinsPeriods(headers, windowStart, windowEnd) {
     }
     if (!res.ok) return [];
     const body = await res.json();
-    return (body.data || [])
+    const periodsInWindow = (body.data || [])
       .filter(p => p.attributes.starts_at)
       .filter(p => {
         const t = new Date(p.attributes.starts_at).getTime();
         return t >= windowStart && t <= windowEnd;
-      })
-      .map(p => ({
+      });
+
+    const candidatesPerPeriod = await Promise.all(periodsInWindow.map(async (period) => {
+      let timesRes;
+      try {
+        timesRes = await fetch(`${CHECKINS_BASE}/events/${ev.id}/event_periods/${period.id}/event_times?per_page=25`, { headers });
+      } catch (err) {
+        timesRes = null;
+      }
+      const times = timesRes && timesRes.ok ? ((await timesRes.json()).data || []) : [];
+      const timesWithStart = times.filter(t => t.attributes.starts_at);
+
+      if (timesWithStart.length > 0) {
+        return timesWithStart.map(t => ({
+          eventName: [ev.name, t.attributes.name].filter(Boolean).join(" "),
+          startsAt: t.attributes.starts_at,
+          dateKey: churchDateKey(t.attributes.starts_at),
+          attendance: attendanceTotal(t.attributes),
+        }));
+      }
+      // No per-service breakdown available (or the org doesn't use event
+      // times) — fall back to the period's own combined total.
+      return [{
         eventName: ev.name,
-        startsAt: p.attributes.starts_at,
-        dateKey: churchDateKey(p.attributes.starts_at),
-        attendance: (p.attributes.regular_count || 0) + (p.attributes.guest_count || 0),
-      }));
+        startsAt: period.attributes.starts_at,
+        dateKey: churchDateKey(period.attributes.starts_at),
+        attendance: attendanceTotal(period.attributes),
+      }];
+    }));
+
+    return candidatesPerPeriod.flat();
   }));
 
   return { periods: periodsPerEvent.flat(), warning: null };
