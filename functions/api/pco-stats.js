@@ -19,6 +19,16 @@ const CHURCH_TIMEZONE = "America/New_York";
 const CHECKINS_WINDOW_DAYS = 56; // ~8 weeks of trend
 const NEW_PEOPLE_WINDOW_DAYS = 30;
 const SERVING_WINDOW_DAYS_FUTURE = 21; // next 3 weeks of scheduling
+const SERVING_WINDOW_DAYS_PAST = 14; // default history shown in the Serving Responses tab
+const SERVING_WINDOW_DAYS_PAST_MAX = 120; // "Load older services" caps out around 4 months back
+
+// A wider past window means more historical Plans need their own
+// team_members fetch — bound that regardless of window size so a large org
+// can't blow past Cloudflare Pages Functions' per-invocation subrequest
+// limit. Upcoming plans (the ones the Responded/Needs Response stats are
+// actually about) are never subject to this budget — only past-plan detail
+// for browsing history can degrade.
+const MAX_PAST_TEAM_MEMBER_PROBES = 80;
 
 function churchDateKey(iso) {
   try {
@@ -38,10 +48,14 @@ export async function onRequestGet(context) {
     Accept: "application/json",
   };
 
+  const url = new URL(context.request.url);
+  const requestedDaysPast = Number(url.searchParams.get("days_past")) || SERVING_WINDOW_DAYS_PAST;
+  const servingDaysPast = Math.min(Math.max(requestedDaysPast, SERVING_WINDOW_DAYS_PAST), SERVING_WINDOW_DAYS_PAST_MAX);
+
   const [checkins, people, serving] = await Promise.all([
     fetchCheckinsStats(headers),
     fetchPeopleStats(headers),
-    fetchServingStats(headers),
+    fetchServingStats(headers, servingDaysPast),
   ]);
 
   return json({ checkins, people, serving });
@@ -123,14 +137,20 @@ async function fetchPeopleStats(headers) {
   }
 }
 
-// Volunteer scheduling for the next few weeks — who's signed up, who hasn't
-// confirmed, and who's carrying the most of the load. Uses the same
-// order=-sort_date + per_page=25 + client-side window filter that
-// pco-plans.js already relies on for Plans (proven to surface Sunday
-// Services correctly) rather than a `where[sort_date]` range filter — that
-// filter's exact support/syntax on this endpoint isn't confirmed, and it
-// was silently dropping some service types' plans.
-async function fetchServingStats(headers) {
+// Volunteer scheduling for the next few weeks, plus browsable history —
+// who's signed up, who hasn't confirmed, and who's carrying the most of
+// the load. Uses the same order=-sort_date + per_page + client-side window
+// filter that pco-plans.js already relies on for Plans (proven to surface
+// Sunday Services correctly) rather than a `where[sort_date]` range filter
+// — that filter's exact support/syntax on this endpoint isn't confirmed,
+// and it was silently dropping some service types' plans.
+//
+// Past and future plans are kept strictly separate: the Responded/Needs
+// Response stats (and Home/Church Stats' summary of them) are about
+// upcoming scheduling gaps specifically, so they're computed from future
+// plans only, regardless of how far back `daysPast` reaches — only the
+// Serving Responses tab's history browsing sees `past_plans`.
+async function fetchServingStats(headers, daysPast) {
   try {
     const typesRes = await fetch(`${PCO_SERVICES_BASE}/service_types?per_page=100`, { headers });
     if (!typesRes.ok) return { error: { status: typesRes.status } };
@@ -138,12 +158,20 @@ async function fetchServingStats(headers) {
     const serviceTypes = (typesBody.data || []).map(t => ({ id: t.id, name: t.attributes.name }));
 
     const now = Date.now();
+    const windowStart = now - daysPast * 86400000;
     const windowEnd = now + SERVING_WINDOW_DAYS_FUTURE * 86400000;
 
+    // Fixed at PCO's practical per_page ceiling (already relied on
+    // elsewhere in this file) rather than sized from the requested window:
+    // results come back newest-first, so if a service type has plans
+    // dated past windowEnd (e.g. a year of auto-generated future Plans),
+    // a window-sized page could be entirely consumed by those before ever
+    // reaching the window we actually want — silently dropping history
+    // while claiming the full requested range was searched.
     const plansPerType = await Promise.all(serviceTypes.map(async (st) => {
       let res;
       try {
-        res = await fetch(`${PCO_SERVICES_BASE}/service_types/${st.id}/plans?order=-sort_date&per_page=25`, { headers });
+        res = await fetch(`${PCO_SERVICES_BASE}/service_types/${st.id}/plans?order=-sort_date&per_page=100`, { headers });
       } catch (err) {
         return [];
       }
@@ -153,7 +181,7 @@ async function fetchServingStats(headers) {
         .filter(p => p.attributes.sort_date)
         .filter(p => {
           const t = new Date(p.attributes.sort_date).getTime();
-          return t >= now && t <= windowEnd;
+          return t >= windowStart && t <= windowEnd;
         })
         .map(p => ({
           service_type_id: st.id,
@@ -163,13 +191,15 @@ async function fetchServingStats(headers) {
           sort_date: p.attributes.sort_date,
         }));
     }));
-    const plans = plansPerType.flat().sort((a, b) => a.sort_date.localeCompare(b.sort_date));
+    const allPlans = plansPerType.flat().sort((a, b) => a.sort_date.localeCompare(b.sort_date));
+    const futurePlans = allPlans.filter(p => new Date(p.sort_date).getTime() >= now);
+    const pastPlans = allPlans.filter(p => new Date(p.sort_date).getTime() < now);
 
     // Keep signups grouped per plan (not just flattened) so the Serving
-    // Responses tab can show, for each upcoming plan, exactly who's
-    // confirmed, declined, or still hasn't answered — the thing PCO's own
-    // matrix view buries several clicks deep.
-    const plansWithSignups = await Promise.all(plans.map(async (p) => {
+    // Responses tab can show, for each plan, exactly who's confirmed,
+    // declined, or still hasn't answered — the thing PCO's own matrix view
+    // buries several clicks deep.
+    const fetchSignups = async (p) => {
       let res;
       try {
         res = await fetch(`${PCO_SERVICES_BASE}/service_types/${p.service_type_id}/plans/${p.plan_id}/team_members?per_page=100`, { headers });
@@ -184,9 +214,25 @@ async function fetchServingStats(headers) {
         status: tm.attributes.status, // "C" confirmed, "U" unconfirmed, "D" declined
       }));
       return { ...p, signups };
-    }));
+    };
 
-    const allSignups = plansWithSignups.flatMap(p => p.signups);
+    // Future plans always get their signups fetched in full — the stats
+    // below depend on them. Past plans (pure history, potentially many
+    // more of them at a wide window) share a bounded budget instead —
+    // spent most-recent-first (pastPlans is ascending, so reverse), since
+    // that's what a single "Load older services" click actually asked
+    // for; anything the budget doesn't reach is marked signups_truncated
+    // rather than silently rendered as an empty team.
+    const futureWithSignups = await Promise.all(futurePlans.map(fetchSignups));
+    const pastBudget = { remaining: MAX_PAST_TEAM_MEMBER_PROBES };
+    const pastWithSignupsDesc = await Promise.all([...pastPlans].reverse().map(async (p) => {
+      if (pastBudget.remaining <= 0) return { ...p, signups: [], signups_truncated: true };
+      pastBudget.remaining -= 1;
+      return fetchSignups(p);
+    }));
+    const pastWithSignups = pastWithSignupsDesc.reverse();
+
+    const allSignups = futureWithSignups.flatMap(p => p.signups);
 
     // Three mutually exclusive buckets by signup status, so confirmed +
     // declined + needs_response always adds back up to total_signups —
@@ -205,8 +251,17 @@ async function fetchServingStats(headers) {
       byName.set(s.name, cur);
     });
 
+    const toDetail = p => ({
+      plan_id: p.plan_id,
+      service_type_name: p.service_type_name,
+      title: p.title,
+      sort_date: p.sort_date,
+      signups: p.signups,
+      signups_truncated: !!p.signups_truncated,
+    });
+
     return {
-      upcoming_plans: plans.length,
+      upcoming_plans: futurePlans.length,
       volunteers_scheduled: byName.size,
       total_signups: allSignups.length,
       confirmed,
@@ -214,13 +269,10 @@ async function fetchServingStats(headers) {
       responded: confirmed + declined,
       needs_response: needsResponse,
       top_volunteers: [...byName.values()].sort((a, b) => b.count - a.count).slice(0, 5),
-      plans: plansWithSignups.map(p => ({
-        plan_id: p.plan_id,
-        service_type_name: p.service_type_name,
-        title: p.title,
-        sort_date: p.sort_date,
-        signups: p.signups,
-      })),
+      plans: futureWithSignups.map(toDetail),
+      past_plans: pastWithSignups.map(toDetail),
+      days_past: daysPast,
+      days_past_max: SERVING_WINDOW_DAYS_PAST_MAX,
       error: null,
     };
   } catch (err) {
