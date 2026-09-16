@@ -411,6 +411,9 @@ let churchStats = null;
 let churchStatsError = null;
 let churchStatsLoaded = false;
 let churchStatsLoading = false;
+let servingDaysPast = 14;
+let servingDaysPastMax = 120;
+let servingLoadingMore = false;
 
 function dateKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -682,6 +685,10 @@ function render() {
     content.innerHTML = renderServingResponses();
     const servingRefreshBtn = document.getElementById("serving-refresh");
     if (servingRefreshBtn) servingRefreshBtn.addEventListener("click", () => loadChurchStats(true));
+    const servingLoadMoreBtn = document.getElementById("serving-load-more");
+    if (servingLoadMoreBtn) servingLoadMoreBtn.addEventListener("click", () => {
+      loadChurchStats(false, Math.min(servingDaysPast + LOAD_MORE_STEP_DAYS, servingDaysPastMax));
+    });
     if (!churchStatsLoaded) loadChurchStats();
     return;
   }
@@ -1216,16 +1223,28 @@ function renderChurchStatsChart() {
   charts.push(c);
 }
 
-// One card per upcoming Plan with a serving team, grouped by response status
-// — Needs Response first, since that's the actionable list, then Declined,
-// then Confirmed. Same underlying data/fetch as the Church Stats "Serving &
-// Volunteers" summary (churchStats.serving), just shown at full detail
-// instead of top-5-and-a-count.
+function servingLoadMoreRow() {
+  if (servingDaysPast >= servingDaysPastMax) {
+    return `<div class="load-more-row"><span class="notes">Showing the last ${servingDaysPast} days — that's as far back as this loads.</span></div>`;
+  }
+  return `<div class="load-more-row">
+    <button class="btn-secondary" id="serving-load-more" ${servingLoadingMore ? "disabled" : ""}>${servingLoadingMore ? "Loading…" : "↓ Load older services"}</button>
+    <span class="notes">Showing the last ${servingDaysPast} days</span>
+  </div>`;
+}
+
+// One card per Plan with a serving team, grouped by response status —
+// Needs Response first, since that's the actionable list, then Declined,
+// then Confirmed. Combines the same upcoming-scheduling data used by the
+// Church Stats "Serving & Volunteers" summary (churchStats.serving.plans)
+// with browsable history (churchStats.serving.past_plans) — the
+// Responded/Needs Response stats themselves stay computed from upcoming
+// plans only, however far back history is loaded here.
 function renderServingResponses() {
   const header = `<div class="pco-header">
     <div>
       <h3 class="display" style="margin:0 0 4px;">Serving Responses</h3>
-      <div style="color:var(--muted);font-size:13px;">Who's confirmed, declined, or hasn't answered yet for each upcoming plan — pulled from Planning Center.</div>
+      <div style="color:var(--muted);font-size:13px;">Who's confirmed, declined, or hasn't answered yet for each plan — pulled from Planning Center.</div>
     </div>
     <button class="btn-secondary" id="serving-refresh" ${churchStatsLoading ? "disabled" : ""}>${churchStatsLoading ? "↻ Refreshing…" : "↻ Refresh"}</button>
   </div>`;
@@ -1242,12 +1261,15 @@ function renderServingResponses() {
     return `${header}<div class="error-banner">${statsErrorMessage((serving && serving.error) || {})}</div>`;
   }
 
-  const plans = serving.plans || [];
+  // past_plans and plans are each already sorted ascending, and every
+  // past_plans date is before every plans date, so concatenating keeps
+  // the combined list in date order without re-sorting.
+  const plans = [...(serving.past_plans || []), ...(serving.plans || [])];
   if (plans.length === 0) {
     return `${header}<div class="empty">
-      <div class="display">No upcoming plans with a serving team.</div>
-      <div>Nothing scheduled with team signups in the next few weeks.</div>
-    </div>`;
+      <div class="display">No plans with a serving team.</div>
+      <div>Nothing scheduled with team signups in the last ${servingDaysPast} days or next 3 weeks.</div>
+    </div>${servingLoadMoreRow()}`;
   }
 
   const servingGroup = (list, cls, label) => list.length === 0 ? "" : `
@@ -1283,11 +1305,11 @@ function renderServingResponses() {
   const subsection = (label, list) => `
     <div class="section-divider">${label}</div>
     ${list.length === 0
-      ? `<div class="empty" style="padding:32px 20px;"><div>Nothing scheduled with team signups in the next few weeks.</div></div>`
+      ? `<div class="empty" style="padding:32px 20px;"><div>Nothing with a serving team in the last ${servingDaysPast} days or next 3 weeks.</div></div>`
       : list.map(planCard).join("")}
   `;
 
-  return `${header}${subsection("Sunday Services", sundayPlans)}${subsection("SkyYouth", skyYouthPlans)}`;
+  return `${header}${subsection("Sunday Services", sundayPlans)}${subsection("SkyYouth", skyYouthPlans)}${servingLoadMoreRow()}`;
 }
 
 function renderExports() {
@@ -1615,26 +1637,40 @@ async function loadPcoPlans(force, daysPast) {
   render();
 }
 
-async function loadChurchStats(force) {
-  if (churchStatsLoading) return;
-  if (!force && churchStatsLoaded) return;
-  churchStatsLoading = true;
+// `daysPast` beyond the current Serving window means "load older
+// services" — a distinct loading flag from the normal refresh so the
+// button at the bottom of Serving Responses can show its own "Loading…"
+// state without disabling the rest of the page.
+async function loadChurchStats(force, daysPast) {
+  const targetDaysPast = daysPast || servingDaysPast;
+  const isLoadMore = daysPast != null && daysPast > servingDaysPast;
+  if (isLoadMore) {
+    if (servingLoadingMore) return;
+    servingLoadingMore = true;
+  } else {
+    if (churchStatsLoading) return;
+    if (!force && churchStatsLoaded) return;
+    churchStatsLoading = true;
+  }
   churchStatsError = null;
-  if (force) render();
+  render();
   try {
-    const res = await fetch("/api/pco-stats");
+    const res = await fetch(`/api/pco-stats?days_past=${targetDaysPast}`);
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       churchStatsError = body.error || `Church stats request failed (${res.status}).`;
       churchStats = null;
     } else {
       churchStats = body;
+      if (body.serving && body.serving.days_past) servingDaysPast = body.serving.days_past;
+      if (body.serving && body.serving.days_past_max) servingDaysPastMax = body.serving.days_past_max;
     }
   } catch (err) {
     churchStatsError = "Couldn't reach Planning Center: " + err.message;
     churchStats = null;
   }
   churchStatsLoading = false;
+  servingLoadingMore = false;
   churchStatsLoaded = true;
   render();
 }
@@ -1655,7 +1691,7 @@ function checkinsWarningMessage(w) {
   return "Attendance sync is unavailable — couldn't reach Check-Ins: " + escapeHtml(w.error || "unknown error");
 }
 
-const PCO_LOAD_MORE_STEP_DAYS = 30;
+const LOAD_MORE_STEP_DAYS = 30;
 
 function pcoLoadMoreRow() {
   if (pcoDaysPast >= pcoDaysPastMax) {
@@ -1781,7 +1817,7 @@ function wirePcoTabHandlers(content, filterState) {
   if (refreshBtn) refreshBtn.addEventListener("click", () => loadPcoPlans(true));
   const loadMoreBtn = document.getElementById("pco-load-more");
   if (loadMoreBtn) loadMoreBtn.addEventListener("click", () => {
-    loadPcoPlans(false, Math.min(pcoDaysPast + PCO_LOAD_MORE_STEP_DAYS, pcoDaysPastMax));
+    loadPcoPlans(false, Math.min(pcoDaysPast + LOAD_MORE_STEP_DAYS, pcoDaysPastMax));
   });
   content.querySelectorAll(".pco-log-btn").forEach(btn => {
     btn.addEventListener("click", () => openModal(null, pcoPlans.find(p => p.id === btn.dataset.id)));
