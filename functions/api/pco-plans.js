@@ -213,18 +213,20 @@ export async function onRequestGet(context) {
   const windowEnd = Date.now() + WINDOW_DAYS_FUTURE * 86400000;
   const warnings = [];
 
-  // A wider window needs more raw rows fetched to make sure every Plan/
-  // period that falls inside it actually gets returned — services are
-  // usually weekly, so this scales with the window instead of guessing.
-  const perPage = Math.min(100, Math.max(25, Math.ceil((daysPast + WINDOW_DAYS_FUTURE) / 7) + 10));
-
-  const checkinsPromise = fetchCheckinsPeriods(headers, windowStart, windowEnd, perPage);
+  // Fixed at PCO's practical per_page ceiling rather than sized from the
+  // requested window: results come back newest-first, so if a service
+  // type/Check-Ins event has entries dated past the window's far end (e.g.
+  // a year of auto-generated future Plans), a window-sized page could be
+  // entirely consumed by those before ever reaching the window we
+  // actually want — silently dropping history while claiming the full
+  // requested range was searched.
+  const checkinsPromise = fetchCheckinsPeriods(headers, windowStart, windowEnd, 100);
   const artworkBudget = { remaining: MAX_ARTWORK_PROBES };
 
   const plansPerType = await Promise.all(serviceTypes.map(async (st) => {
     let res;
     try {
-      res = await fetch(`${PCO_BASE}/service_types/${st.id}/plans?order=-sort_date&per_page=${perPage}`, { headers });
+      res = await fetch(`${PCO_BASE}/service_types/${st.id}/plans?order=-sort_date&per_page=100`, { headers });
     } catch (err) {
       warnings.push({ service_type_name: st.name, error: err.message });
       return [];

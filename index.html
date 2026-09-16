@@ -1228,7 +1228,7 @@ function servingLoadMoreRow() {
     return `<div class="load-more-row"><span class="notes">Showing the last ${servingDaysPast} days — that's as far back as this loads.</span></div>`;
   }
   return `<div class="load-more-row">
-    <button class="btn-secondary" id="serving-load-more" ${servingLoadingMore ? "disabled" : ""}>${servingLoadingMore ? "Loading…" : "↓ Load older services"}</button>
+    <button class="btn-secondary" id="serving-load-more" ${churchStatsLoading ? "disabled" : ""}>${servingLoadingMore ? "Loading…" : "↓ Load older services"}</button>
     <span class="notes">Showing the last ${servingDaysPast} days</span>
   </div>`;
 }
@@ -1287,7 +1287,11 @@ function renderServingResponses() {
     return `<div class="card">
       <h3 class="display" style="margin-bottom:4px;">${escapeHtml(p.service_type_name)}</h3>
       <div style="color:var(--muted);font-size:13px;margin-bottom:16px;">${fmtDate(p.sort_date.slice(0, 10))}${p.title && p.title !== p.service_type_name ? " · " + escapeHtml(p.title) : ""}</div>
-      ${p.signups.length === 0 ? `<div class="notes">No one scheduled yet.</div>` : `
+      ${p.signups.length === 0
+        ? (p.signups_truncated
+          ? `<div class="notes">Team details not loaded yet — click "Load older services" again to reach this far back.</div>`
+          : `<div class="notes">No one scheduled yet.</div>`)
+        : `
         ${servingGroup(needsResponse, "status-pending", "Needs Response")}
         ${servingGroup(declined, "status-declined", "Declined")}
         ${servingGroup(confirmed, "status-logged", "Confirmed")}
@@ -1596,21 +1600,25 @@ function renderProductionCharts() {
   }
 }
 
-// `daysPast` beyond the current window means "load older services" — a
-// distinct loading flag from the normal refresh so the button at the
-// bottom of the list can show its own "Loading…" state without disabling
-// the rest of the page.
+// `daysPast` beyond the current window means "load older services" —
+// pcoLoadingMore is tracked separately from pcoLoading only so the button
+// at the bottom of the list can say "Loading…" specifically; both modes
+// still share one in-flight guard and both disable the Refresh button too,
+// so a refresh and a "load more" can never race each other.
 async function loadPcoPlans(force, daysPast) {
   const targetDaysPast = daysPast || pcoDaysPast;
   const isLoadMore = daysPast != null && daysPast > pcoDaysPast;
+  // Both modes share one in-flight guard — a refresh firing mid-"load
+  // more" (or vice versa) could resolve out of order and have whichever
+  // finishes last silently overwrite the other's result (e.g. reverting
+  // an already-expanded window back to the smaller one).
+  if (pcoLoading || pcoLoadingMore) return;
   if (isLoadMore) {
-    if (pcoLoadingMore) return;
     pcoLoadingMore = true;
   } else {
-    if (pcoLoading) return;
     if (!force && pcoLoaded) return;
-    pcoLoading = true;
   }
+  pcoLoading = true;
   pcoError = null;
   render();
   try {
@@ -1638,20 +1646,25 @@ async function loadPcoPlans(force, daysPast) {
 }
 
 // `daysPast` beyond the current Serving window means "load older
-// services" — a distinct loading flag from the normal refresh so the
-// button at the bottom of Serving Responses can show its own "Loading…"
-// state without disabling the rest of the page.
+// services" — servingLoadingMore is tracked separately from
+// churchStatsLoading only so the button at the bottom of Serving
+// Responses can say "Loading…" specifically; both modes still share one
+// in-flight guard and both disable the Refresh buttons too, so a refresh
+// and a "load more" can never race each other.
 async function loadChurchStats(force, daysPast) {
   const targetDaysPast = daysPast || servingDaysPast;
   const isLoadMore = daysPast != null && daysPast > servingDaysPast;
+  // Both modes share one in-flight guard — a refresh firing mid-"load
+  // more" (or vice versa) could resolve out of order and have whichever
+  // finishes last silently overwrite the other's result (e.g. reverting
+  // an already-expanded window back to the smaller one).
+  if (churchStatsLoading || servingLoadingMore) return;
   if (isLoadMore) {
-    if (servingLoadingMore) return;
     servingLoadingMore = true;
   } else {
-    if (churchStatsLoading) return;
     if (!force && churchStatsLoaded) return;
-    churchStatsLoading = true;
   }
+  churchStatsLoading = true;
   churchStatsError = null;
   render();
   try {
@@ -1698,7 +1711,7 @@ function pcoLoadMoreRow() {
     return `<div class="load-more-row"><span class="notes">Showing the last ${pcoDaysPast} days — that's as far back as this loads.</span></div>`;
   }
   return `<div class="load-more-row">
-    <button class="btn-secondary" id="pco-load-more" ${pcoLoadingMore ? "disabled" : ""}>${pcoLoadingMore ? "Loading…" : "↓ Load older services"}</button>
+    <button class="btn-secondary" id="pco-load-more" ${pcoLoading ? "disabled" : ""}>${pcoLoadingMore ? "Loading…" : "↓ Load older services"}</button>
     <span class="notes">Showing the last ${pcoDaysPast} days</span>
   </div>`;
 }

@@ -160,12 +160,18 @@ async function fetchServingStats(headers, daysPast) {
     const now = Date.now();
     const windowStart = now - daysPast * 86400000;
     const windowEnd = now + SERVING_WINDOW_DAYS_FUTURE * 86400000;
-    const perPage = Math.min(100, Math.max(25, Math.ceil((daysPast + SERVING_WINDOW_DAYS_FUTURE) / 7) + 10));
 
+    // Fixed at PCO's practical per_page ceiling (already relied on
+    // elsewhere in this file) rather than sized from the requested window:
+    // results come back newest-first, so if a service type has plans
+    // dated past windowEnd (e.g. a year of auto-generated future Plans),
+    // a window-sized page could be entirely consumed by those before ever
+    // reaching the window we actually want — silently dropping history
+    // while claiming the full requested range was searched.
     const plansPerType = await Promise.all(serviceTypes.map(async (st) => {
       let res;
       try {
-        res = await fetch(`${PCO_SERVICES_BASE}/service_types/${st.id}/plans?order=-sort_date&per_page=${perPage}`, { headers });
+        res = await fetch(`${PCO_SERVICES_BASE}/service_types/${st.id}/plans?order=-sort_date&per_page=100`, { headers });
       } catch (err) {
         return [];
       }
@@ -212,14 +218,19 @@ async function fetchServingStats(headers, daysPast) {
 
     // Future plans always get their signups fetched in full — the stats
     // below depend on them. Past plans (pure history, potentially many
-    // more of them at a wide window) share a bounded budget instead.
+    // more of them at a wide window) share a bounded budget instead —
+    // spent most-recent-first (pastPlans is ascending, so reverse), since
+    // that's what a single "Load older services" click actually asked
+    // for; anything the budget doesn't reach is marked signups_truncated
+    // rather than silently rendered as an empty team.
     const futureWithSignups = await Promise.all(futurePlans.map(fetchSignups));
     const pastBudget = { remaining: MAX_PAST_TEAM_MEMBER_PROBES };
-    const pastWithSignups = await Promise.all(pastPlans.map(async (p) => {
-      if (pastBudget.remaining <= 0) return { ...p, signups: [] };
+    const pastWithSignupsDesc = await Promise.all([...pastPlans].reverse().map(async (p) => {
+      if (pastBudget.remaining <= 0) return { ...p, signups: [], signups_truncated: true };
       pastBudget.remaining -= 1;
       return fetchSignups(p);
     }));
+    const pastWithSignups = pastWithSignupsDesc.reverse();
 
     const allSignups = futureWithSignups.flatMap(p => p.signups);
 
@@ -246,6 +257,7 @@ async function fetchServingStats(headers, daysPast) {
       title: p.title,
       sort_date: p.sort_date,
       signups: p.signups,
+      signups_truncated: !!p.signups_truncated,
     });
 
     return {
