@@ -97,6 +97,8 @@ docs/                        project site (GitHub Pages) + README screenshots
 
 Editing it later is just editing `docs/index.html` and pushing — GitHub Pages rebuilds automatically.
 
+`docs/guide.html` is the full user guide (linked from the app's `Help` button and from the project site), also downloadable as a PDF (`docs/skyline-pulse-guide.pdf`) via the button on that page. The PDF isn't generated automatically — after editing the guide, regenerate it locally with headless Chromium/Playwright printing the local file to PDF (`page.pdf()` with `@media print` emulated), then commit the updated PDF alongside the HTML changes.
+
 ---
 
 ## Deployment Guide
