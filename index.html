@@ -1287,7 +1287,12 @@ function renderServingResponses() {
   // two-section view; picking a type narrows both sections at once.
   const servingRowLabel = p => guessServiceType(p.service_type_name) || p.service_type_name;
   const typesPresent = [...new Set(plans.map(servingRowLabel))].sort();
-  const filterRow = typesPresent.length <= 1 ? "" : `<div class="filter-row">
+  // Keep the row (and its All chip) visible whenever a filter is active,
+  // even if the current data only has one type left to show — otherwise a
+  // stale selection (e.g. from before a Load More/Refresh changed what's
+  // present) can strand the page in a filtered-empty state with no chip
+  // left to clear it.
+  const filterRow = (typesPresent.length <= 1 && servingFilterTypes.size === 0) ? "" : `<div class="filter-row">
     <button class="filter-chip ${servingFilterTypes.size === 0 ? "all-active" : ""}" data-filter="All">All (${plans.length})</button>
     ${typesPresent.map(label => {
       const matched = SERVICE_TYPES.includes(label) ? label : "";
@@ -1778,7 +1783,12 @@ function renderPcoSection(plans, filterState, opts) {
   const pcoRowLabel = p => guessServiceType(p.plan_time_name || p.service_type_name) || p.service_type_name;
 
   const typesPresent = [...new Set(plans.map(pcoRowLabel))].sort();
-  const filterRow = typesPresent.length <= 1 ? "" : `<div class="filter-row">
+  // Keep the row (and its All chip) visible whenever a filter is active,
+  // even if the current data only has one type left to show — otherwise a
+  // stale selection (e.g. from before a Load More/Refresh changed what's
+  // present) can strand the page in a filtered-empty state with no chip
+  // left to clear it.
+  const filterRow = (typesPresent.length <= 1 && filterState.size === 0) ? "" : `<div class="filter-row">
     <button class="filter-chip ${filterState.size === 0 ? "all-active" : ""}" data-filter="All">All (${plans.length})</button>
     ${typesPresent.map(label => {
       const matched = SERVICE_TYPES.includes(label) ? label : "";
