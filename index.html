@@ -414,6 +414,7 @@ let churchStatsLoading = false;
 let servingDaysPast = 14;
 let servingDaysPastMax = 120;
 let servingLoadingMore = false;
+let servingFilterTypes = new Set();
 
 function dateKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -688,6 +689,15 @@ function render() {
     const servingLoadMoreBtn = document.getElementById("serving-load-more");
     if (servingLoadMoreBtn) servingLoadMoreBtn.addEventListener("click", () => {
       loadChurchStats(false, Math.min(servingDaysPast + LOAD_MORE_STEP_DAYS, servingDaysPastMax));
+    });
+    content.querySelectorAll(".filter-chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        const val = chip.dataset.filter;
+        if (val === "All") servingFilterTypes.clear();
+        else if (servingFilterTypes.has(val)) servingFilterTypes.delete(val);
+        else servingFilterTypes.add(val);
+        render();
+      });
     });
     if (!churchStatsLoaded) loadChurchStats();
     return;
@@ -1272,6 +1282,27 @@ function renderServingResponses() {
     </div>${servingLoadMoreRow()}`;
   }
 
+  // Same filter-chip pattern as the Sunday Services/SkyYouth Plans lists,
+  // but spanning both — the default (no filter) is exactly today's
+  // two-section view; picking a type narrows both sections at once.
+  const servingRowLabel = p => guessServiceType(p.service_type_name) || p.service_type_name;
+  const typesPresent = [...new Set(plans.map(servingRowLabel))].sort();
+  const filterRow = typesPresent.length <= 1 ? "" : `<div class="filter-row">
+    <button class="filter-chip ${servingFilterTypes.size === 0 ? "all-active" : ""}" data-filter="All">All (${plans.length})</button>
+    ${typesPresent.map(label => {
+      const matched = SERVICE_TYPES.includes(label) ? label : "";
+      const cls = matched ? badgeClass(matched) : "badge-unmatched";
+      const count = plans.filter(p => servingRowLabel(p) === label).length;
+      return `<button class="filter-chip ${cls} ${servingFilterTypes.has(label) ? "active" : ""}" data-filter="${escapeHtml(label)}">${escapeHtml(label)} (${count})</button>`;
+    }).join("")}
+  </div>`;
+
+  const filteredPlans = servingFilterTypes.size === 0 ? plans : plans.filter(p => servingFilterTypes.has(servingRowLabel(p)));
+
+  if (filteredPlans.length === 0) {
+    return `${header}${filterRow}<div class="filter-empty">No plans for ${[...servingFilterTypes].map(escapeHtml).join(", ")}.</div>${servingLoadMoreRow()}`;
+  }
+
   const servingGroup = (list, cls, label) => list.length === 0 ? "" : `
     <div class="serving-group">
       <div class="serving-group-label">${label} (${list.length})</div>
@@ -1302,9 +1333,11 @@ function renderServingResponses() {
   // Split the same way the rest of the app splits Sunday Services from
   // SkyYouth (isSkyYouthPlan, by the plan's underlying PCO Service Type),
   // instead of one flat list where SkyYouth's usually-smaller team can
-  // crowd out or get lost among Sunday's.
-  const sundayPlans = plans.filter(p => !isSkyYouthPlan(p));
-  const skyYouthPlans = plans.filter(isSkyYouthPlan);
+  // crowd out or get lost among Sunday's. Filtering (if any) already
+  // narrowed filteredPlans above, so a filter like "SkyYouth" naturally
+  // empties the Sunday Services section rather than needing special-casing.
+  const sundayPlans = filteredPlans.filter(p => !isSkyYouthPlan(p));
+  const skyYouthPlans = filteredPlans.filter(isSkyYouthPlan);
 
   const subsection = (label, list) => `
     <div class="section-divider">${label}</div>
@@ -1313,7 +1346,7 @@ function renderServingResponses() {
       : list.map(planCard).join("")}
   `;
 
-  return `${header}${subsection("Sunday Services", sundayPlans)}${subsection("SkyYouth", skyYouthPlans)}${servingLoadMoreRow()}`;
+  return `${header}${filterRow}${subsection("Sunday Services", sundayPlans)}${subsection("SkyYouth", skyYouthPlans)}${servingLoadMoreRow()}`;
 }
 
 function renderExports() {
