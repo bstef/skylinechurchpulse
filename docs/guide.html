@@ -104,11 +104,20 @@
   }
 
   @media print{
-    :root{ --ink:#1F2A24; --paper:#FFFFFF; --surface:#FFFFFF; --brass:#8A6A3D; --pew:#1E5FCC; --rust:#A6503C; --line:#CFC9BA; --muted:#5B5648; --brass-soft:#F1E7D6; --good-soft:#E1F1E7; --good:#1F6B44; }
+    /* :root[data-theme="dark"] (set explicitly by the theme script) has
+       higher specificity than a plain :root override, so a viewer with
+       dark mode active would otherwise keep dark colors when printing —
+       match it explicitly here to force print to light regardless. */
+    :root, :root[data-theme="dark"], :root[data-theme="light"]{ --ink:#1F2A24; --paper:#FFFFFF; --surface:#FFFFFF; --brass:#8A6A3D; --pew:#1E5FCC; --rust:#A6503C; --line:#CFC9BA; --muted:#5B5648; --brass-soft:#F1E7D6; --good-soft:#E1F1E7; --good:#1F6B44; }
     body{background:#fff;}
     header{position:static;box-shadow:none;}
     header nav, #theme-toggle, header .btn{display:none !important;}
     .quicknav, .guide-hero a.btn{display:none !important;}
+    /* logo-dark.png is white artwork meant for a dark background — force
+       the light logo regardless of the viewer's stored/OS theme, since
+       print always forces a white page background above. */
+    .logo-light{display:block !important;}
+    .logo-dark{display:none !important;}
     .guide-hero{padding:24px 0;}
     .guide-section{padding:28px 0;}
     .shot{box-shadow:none;}
