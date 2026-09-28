@@ -1049,7 +1049,7 @@ const HOME_CARDS = [
   { view: "pco", icon: "🗓️", title: "Sunday Services", desc: "Log attendance, unity, engagement, and flow for this week's services.", countOf: () => `${entries.filter(e => e.service_type !== "SkyYouth").length} logged` },
   { view: "production", icon: "🎛️", title: "Production", desc: "Role attendance and a slides fit-check for the tech team.", countOf: () => `${productionEntries.length} logged` },
   { view: "skyyouth", icon: "🎧", title: "SkyYouth", desc: "SkyYouth's own Planning Center feed and ledger.", countOf: () => `${skyYouthEntries().length} logged` },
-  { view: "serving", icon: "🙋", title: "Serving Responses", desc: "Who's confirmed, declined, or hasn't answered yet — per upcoming plan.", countOf: () => {
+  { view: "serving", icon: "🙋", title: "Planning Center Responses", desc: "Who's confirmed, declined, or hasn't answered yet — per upcoming plan.", countOf: () => {
     const n = churchStats && churchStats.serving && !churchStats.serving.error ? churchStats.serving.needs_response : null;
     return n != null ? `${n} awaiting response` : "From Planning Center";
   } },
@@ -1253,7 +1253,7 @@ function servingLoadMoreRow() {
 function renderServingResponses() {
   const header = `<div class="pco-header">
     <div>
-      <h3 class="display" style="margin:0 0 4px;">Serving Responses</h3>
+      <h3 class="display" style="margin:0 0 4px;">Planning Center Responses</h3>
       <div style="color:var(--muted);font-size:13px;">Who's confirmed, declined, or hasn't answered yet for each plan — pulled from Planning Center.</div>
     </div>
     <button class="btn-secondary" id="serving-refresh" ${churchStatsLoading ? "disabled" : ""}>${churchStatsLoading ? "↻ Refreshing…" : "↻ Refresh"}</button>
@@ -1335,14 +1335,13 @@ function renderServingResponses() {
     </div>`;
   };
 
-  // Split the same way the rest of the app splits Sunday Services from
-  // SkyYouth (isSkyYouthPlan, by the plan's underlying PCO Service Type),
-  // instead of one flat list where SkyYouth's usually-smaller team can
-  // crowd out or get lost among Sunday's. Filtering (if any) already
-  // narrowed filteredPlans above, so a filter like "SkyYouth" naturally
-  // empties the Sunday Services section rather than needing special-casing.
-  const sundayPlans = filteredPlans.filter(p => !isSkyYouthPlan(p));
-  const skyYouthPlans = filteredPlans.filter(isSkyYouthPlan);
+  // Grouped by whatever service types are actually present/selected
+  // instead of a fixed "Sunday Services" vs. SkyYouth split — plenty of
+  // these PCO Service Types (children's check-in, assimilation, etc.)
+  // aren't Sunday-only, so a static "Sunday Services" heading over all of
+  // them would misdescribe what's shown. "All" (the default) renders one
+  // section per type present; picking a filter narrows to just those.
+  const groupTypes = servingFilterTypes.size === 0 ? typesPresent : typesPresent.filter(t => servingFilterTypes.has(t));
 
   const subsection = (label, list) => `
     <div class="section-divider">${label}</div>
@@ -1351,7 +1350,9 @@ function renderServingResponses() {
       : list.map(planCard).join("")}
   `;
 
-  return `${header}${filterRow}${subsection("Sunday Services", sundayPlans)}${subsection("SkyYouth", skyYouthPlans)}${servingLoadMoreRow()}`;
+  const sections = groupTypes.map(type => subsection(type, filteredPlans.filter(p => servingRowLabel(p) === type))).join("");
+
+  return `${header}${filterRow}${sections}${servingLoadMoreRow()}`;
 }
 
 function renderExports() {
