@@ -145,6 +145,8 @@
   .icon-btn{background:none;border:none;color:var(--muted);font-size:15px;width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;}
   .icon-btn:hover{background:var(--line);color:var(--ink);}
   .filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;}
+  .filter-row-scroll{flex-wrap:nowrap;overflow-x:auto;padding-bottom:6px;}
+  .filter-row-scroll .filter-chip{flex:0 0 auto;}
   .filter-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:20px;padding:7px 14px;font-size:13px;font-weight:600;}
   .filter-chip.badge-0{background:var(--c0-soft);color:var(--c0);border-color:transparent;}
   .filter-chip.badge-1{background:var(--c1-soft);color:var(--c1);border-color:transparent;}
@@ -690,12 +692,21 @@ function render() {
     if (servingLoadMoreBtn) servingLoadMoreBtn.addEventListener("click", () => {
       loadChurchStats(false, Math.min(servingDaysPast + LOAD_MORE_STEP_DAYS, servingDaysPastMax));
     });
+    // Single-select, not additive: with this many possible service types,
+    // letting chips stack (the pattern used elsewhere in the app) meant a
+    // previously-picked type like SkyYouth stayed active forever unless
+    // explicitly clicked again — confusing when picking a new one looks
+    // like it should replace it. Clicking a type always replaces the
+    // current selection; clicking the already-active one clears back to All.
     content.querySelectorAll(".filter-chip").forEach(chip => {
       chip.addEventListener("click", () => {
         const val = chip.dataset.filter;
-        if (val === "All") servingFilterTypes.clear();
-        else if (servingFilterTypes.has(val)) servingFilterTypes.delete(val);
-        else servingFilterTypes.add(val);
+        if (val === "All" || (servingFilterTypes.size === 1 && servingFilterTypes.has(val))) {
+          servingFilterTypes.clear();
+        } else {
+          servingFilterTypes.clear();
+          servingFilterTypes.add(val);
+        }
         render();
       });
     });
@@ -1049,7 +1060,7 @@ const HOME_CARDS = [
   { view: "pco", icon: "🗓️", title: "Sunday Services", desc: "Log attendance, unity, engagement, and flow for this week's services.", countOf: () => `${entries.filter(e => e.service_type !== "SkyYouth").length} logged` },
   { view: "production", icon: "🎛️", title: "Production", desc: "Role attendance and a slides fit-check for the tech team.", countOf: () => `${productionEntries.length} logged` },
   { view: "skyyouth", icon: "🎧", title: "SkyYouth", desc: "SkyYouth's own Planning Center feed and ledger.", countOf: () => `${skyYouthEntries().length} logged` },
-  { view: "serving", icon: "🙋", title: "Serving Responses", desc: "Who's confirmed, declined, or hasn't answered yet — per upcoming plan.", countOf: () => {
+  { view: "serving", icon: "🙋", title: "Planning Center Responses", desc: "Who's confirmed, declined, or hasn't answered yet — per upcoming plan.", countOf: () => {
     const n = churchStats && churchStats.serving && !churchStats.serving.error ? churchStats.serving.needs_response : null;
     return n != null ? `${n} awaiting response` : "From Planning Center";
   } },
@@ -1253,7 +1264,7 @@ function servingLoadMoreRow() {
 function renderServingResponses() {
   const header = `<div class="pco-header">
     <div>
-      <h3 class="display" style="margin:0 0 4px;">Serving Responses</h3>
+      <h3 class="display" style="margin:0 0 4px;">Planning Center Responses</h3>
       <div style="color:var(--muted);font-size:13px;">Who's confirmed, declined, or hasn't answered yet for each plan — pulled from Planning Center.</div>
     </div>
     <button class="btn-secondary" id="serving-refresh" ${churchStatsLoading ? "disabled" : ""}>${churchStatsLoading ? "↻ Refreshing…" : "↻ Refresh"}</button>
@@ -1282,21 +1293,32 @@ function renderServingResponses() {
     </div>${servingLoadMoreRow()}`;
   }
 
-  // Same filter-chip pattern as the Sunday Services/SkyYouth Plans lists,
-  // but spanning both — the default (no filter) is exactly today's
-  // two-section view; picking a type narrows both sections at once.
-  const servingRowLabel = p => guessServiceType(p.service_type_name) || p.service_type_name;
+  // Same filter-chip visual style as the Sunday Services/SkyYouth Plans
+  // lists, but single-select rather than additive (wired below) — with
+  // potentially many PCO service types here, letting chips stack was
+  // confusing (a previous pick stayed active until explicitly toggled
+  // off). No filter selected (the default) shows one section per type.
+  //
+  // The grouping/filter identity is the *exact* PCO service_type_name, not
+  // guessServiceType()'s result — that alias matching is deliberately
+  // loose (e.g. "SkyYouth" matches anything containing "youth"), which is
+  // fine for a single cosmetic badge but would silently merge distinct
+  // PCO service types (e.g. "SkyYouth Middle School" and "SkyYouth High
+  // School") into one group/chip here. guessServiceType is still used,
+  // just only to color a chip when its exact name happens to match a
+  // known type.
+  const servingRowLabel = p => p.service_type_name;
   const typesPresent = [...new Set(plans.map(servingRowLabel))].sort();
   // Keep the row (and its All chip) visible whenever a filter is active,
   // even if the current data only has one type left to show — otherwise a
   // stale selection (e.g. from before a Load More/Refresh changed what's
   // present) can strand the page in a filtered-empty state with no chip
   // left to clear it.
-  const filterRow = (typesPresent.length <= 1 && servingFilterTypes.size === 0) ? "" : `<div class="filter-row">
+  const filterRow = (typesPresent.length <= 1 && servingFilterTypes.size === 0) ? "" : `<div class="filter-row filter-row-scroll">
     <button class="filter-chip ${servingFilterTypes.size === 0 ? "all-active" : ""}" data-filter="All">All (${plans.length})</button>
     ${typesPresent.map(label => {
-      const matched = SERVICE_TYPES.includes(label) ? label : "";
-      const cls = matched ? badgeClass(matched) : "badge-unmatched";
+      const guessed = guessServiceType(label);
+      const cls = guessed ? badgeClass(guessed) : "badge-unmatched";
       const count = plans.filter(p => servingRowLabel(p) === label).length;
       return `<button class="filter-chip ${cls} ${servingFilterTypes.has(label) ? "active" : ""}" data-filter="${escapeHtml(label)}">${escapeHtml(label)} (${count})</button>`;
     }).join("")}
@@ -1335,23 +1357,24 @@ function renderServingResponses() {
     </div>`;
   };
 
-  // Split the same way the rest of the app splits Sunday Services from
-  // SkyYouth (isSkyYouthPlan, by the plan's underlying PCO Service Type),
-  // instead of one flat list where SkyYouth's usually-smaller team can
-  // crowd out or get lost among Sunday's. Filtering (if any) already
-  // narrowed filteredPlans above, so a filter like "SkyYouth" naturally
-  // empties the Sunday Services section rather than needing special-casing.
-  const sundayPlans = filteredPlans.filter(p => !isSkyYouthPlan(p));
-  const skyYouthPlans = filteredPlans.filter(isSkyYouthPlan);
+  // Grouped by whatever service types are actually present/selected
+  // instead of a fixed "Sunday Services" vs. SkyYouth split — plenty of
+  // these PCO Service Types (children's check-in, assimilation, etc.)
+  // aren't Sunday-only, so a static "Sunday Services" heading over all of
+  // them would misdescribe what's shown. "All" (the default) renders one
+  // section per type present; picking a filter narrows to just those.
+  const groupTypes = servingFilterTypes.size === 0 ? typesPresent : typesPresent.filter(t => servingFilterTypes.has(t));
 
   const subsection = (label, list) => `
-    <div class="section-divider">${label}</div>
+    <div class="section-divider">${escapeHtml(label)}</div>
     ${list.length === 0
       ? `<div class="empty" style="padding:32px 20px;"><div>Nothing with a serving team in the last ${servingDaysPast} days or next 3 weeks.</div></div>`
       : list.map(planCard).join("")}
   `;
 
-  return `${header}${filterRow}${subsection("Sunday Services", sundayPlans)}${subsection("SkyYouth", skyYouthPlans)}${servingLoadMoreRow()}`;
+  const sections = groupTypes.map(type => subsection(type, filteredPlans.filter(p => servingRowLabel(p) === type))).join("");
+
+  return `${header}${filterRow}${sections}${servingLoadMoreRow()}`;
 }
 
 function renderExports() {
