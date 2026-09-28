@@ -62,7 +62,7 @@
   .steps{display:flex;flex-direction:column;gap:20px;margin:0 0 28px;}
   .step{display:grid;grid-template-columns:32px 1fr;gap:14px;}
   .step-dot{width:32px;height:32px;border-radius:99px;border:2px solid var(--brass);color:var(--brass);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;font-family:'Fraunces',Georgia,serif;flex-shrink:0;}
-  .step-body strong{display:block;margin-bottom:2px;}
+  .step-body > strong{display:block;margin-bottom:2px;}
   .step-body p{margin:2px 0 0;color:var(--muted);font-size:15px;}
   .step-body code{background:var(--brass-soft);color:var(--brass);padding:1px 6px;border-radius:4px;font-size:13px;font-weight:600;font-family:inherit;}
 
@@ -102,6 +102,30 @@
     .two-col.reverse .two-col-shot{order:0;}
     header nav{display:none;}
   }
+
+  @media print{
+    /* :root[data-theme="dark"] (set explicitly by the theme script) has
+       higher specificity than a plain :root override, so a viewer with
+       dark mode active would otherwise keep dark colors when printing —
+       match it explicitly here to force print to light regardless. */
+    :root, :root[data-theme="dark"], :root[data-theme="light"]{ --ink:#1F2A24; --paper:#FFFFFF; --surface:#FFFFFF; --brass:#8A6A3D; --pew:#1E5FCC; --rust:#A6503C; --line:#CFC9BA; --muted:#5B5648; --brass-soft:#F1E7D6; --good-soft:#E1F1E7; --good:#1F6B44; }
+    body{background:#fff;}
+    header{position:static;box-shadow:none;}
+    header nav, #theme-toggle, header .btn{display:none !important;}
+    .quicknav, .guide-hero a.btn{display:none !important;}
+    /* logo-dark.png is white artwork meant for a dark background — force
+       the light logo regardless of the viewer's stored/OS theme, since
+       print always forces a white page background above. */
+    .logo-light{display:block !important;}
+    .logo-dark{display:none !important;}
+    .guide-hero{padding:24px 0;}
+    .guide-section{padding:28px 0;}
+    .shot{box-shadow:none;}
+    .step, .shot, .shot-cap, .faq-item, .field-table tr, .callout{break-inside:avoid;}
+    .section-label{break-after:avoid;}
+    a{color:var(--ink);text-decoration:none;}
+    footer{display:none;}
+  }
 </style>
 </head>
 <body>
@@ -128,7 +152,8 @@
   <div class="wrap">
     <span class="kicker">User Guide</span>
     <h1 class="display">How to use Skyline Pulse</h1>
-    <p>No login, no account, no training needed. This page walks through the Home page, logging a Sunday service, Production, SkyYouth, Calendar, Analytics, Exports, and Church Stats — in plain steps, with pictures.</p>
+    <p>No login, no account, no training needed. This page walks through the Home page, logging a Sunday service, Production, SkyYouth, Calendar, Analytics, Exports, Church Stats, and Planning Center Responses — in plain steps, with pictures.</p>
+    <a class="btn btn-secondary" href="skyline-pulse-guide.pdf" download style="margin-top:22px;">⬇ Download this guide as a PDF</a>
   </div>
 </section>
 
@@ -143,6 +168,7 @@
     <a href="#analytics">Analytics</a>
     <a href="#exports">Exports</a>
     <a href="#church-stats">Church Stats</a>
+    <a href="#pco-responses">Planning Center Responses</a>
     <a href="#faq">Tips &amp; FAQ</a>
   </div>
 </div>
@@ -419,7 +445,7 @@
       </div>
       <div class="step">
         <div class="step-dot">3</div>
-        <div class="step-body"><strong>Serving &amp; Volunteers</strong><p>How many volunteers are scheduled over the next 3 weeks, a <strong>Responded</strong> vs. <strong>Needs Confirmation</strong> count (declining counts as a response — it's a no, not silence), and a "most scheduled" list. For the full breakdown — who's confirmed, declined, or hasn't answered, per plan, grouped into one section per Planning Center service type actually present (not a fixed Sunday/SkyYouth split, since some types aren't Sunday-only), with filter chips to narrow to one type and a <code>↓ Load older services</code> button for past plans — open the <code>Serving</code> tab under <code>Logging</code> instead, now titled <strong>Planning Center Responses</strong>.</p></div>
+        <div class="step-body"><strong>Serving &amp; Volunteers</strong><p>How many volunteers are scheduled over the next 3 weeks, a <strong>Responded</strong> vs. <strong>Needs Confirmation</strong> count (declining counts as a response — it's a no, not silence), and a "most scheduled" list. For the full breakdown of who's confirmed, declined, or hasn't answered, see <a href="#pco-responses">Planning Center Responses</a> below.</p></div>
       </div>
       <div class="step">
         <div class="step-dot">4</div>
@@ -430,9 +456,35 @@
   </div>
 </section>
 
-<section class="guide-section alt" id="faq">
+<section class="guide-section alt" id="pco-responses">
   <div class="wrap">
-    <div class="section-label"><div class="section-num">10</div><h2 class="display">Tips &amp; FAQ</h2></div>
+    <div class="section-label"><div class="section-num">10</div><h2 class="display">Planning Center Responses</h2></div>
+    <p class="section-lede">Click <code>Planning Center Responses</code> under <code>Logging</code> to see exactly who's confirmed, declined, or hasn't answered a serving request — one card per plan, not just the summary counts on Church Stats.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-dot">1</div>
+        <div class="step-body"><strong>Grouped by service type, automatically</strong><p>Cards are organized into one section per Planning Center service type actually present — Celebration Service, SkyYouth, and any others your organization uses — each correctly labeled with its real name, instead of a fixed Sunday/SkyYouth split. Nothing to configure.</p></div>
+      </div>
+      <div class="step">
+        <div class="step-dot">2</div>
+        <div class="step-body"><strong>Filter to one type</strong><p>Click a chip at the top (like <code>SkyYouth</code>) to narrow the page down to just that section. Chips are single-select — click a different one to switch, or click the active one again (or <code>All</code>) to go back to seeing everything.</p></div>
+      </div>
+      <div class="step">
+        <div class="step-dot">3</div>
+        <div class="step-body"><strong>Needs Response, Declined, Confirmed</strong><p>Each plan's card breaks its team into these three groups — Needs Response first, since that's the one worth following up on. A decline still counts as an answer; it's grouped separately from "hasn't responded yet."</p></div>
+      </div>
+      <div class="step">
+        <div class="step-dot">4</div>
+        <div class="step-body"><strong>Browse further back</strong><p>Past plans show up here too, not just upcoming ones. <code>↓ Load older services</code> at the bottom pulls in another month of history each click, up to about 4 months back — same pattern as the Sunday Services/SkyYouth lists.</p></div>
+      </div>
+    </div>
+    <div class="callout"><strong>One limitation worth knowing:</strong> a multi-time Sunday folder like <code>Celebration Service</code> (9:30 and 11:00 as one Plan with two Plan Times) shows as a single combined card and chip — Planning Center tracks serving teams at the Plan level, not per service time, so there's no way to split that team roster further here.</div>
+  </div>
+</section>
+
+<section class="guide-section" id="faq">
+  <div class="wrap">
+    <div class="section-label"><div class="section-num">11</div><h2 class="display">Tips &amp; FAQ</h2></div>
     <div class="faq-item">
       <h3>What does the <span class="badge-demo">From PCO</span> / <span class="badge-demo over">Overridden</span> badge mean?</h3>
       <p>Skyline Pulse pulls attendance headcounts automatically from Planning Center Check-Ins where it can. <span class="badge-demo">From PCO</span> means the number shown came from that sync; if you type a different number, it switches to <span class="badge-demo over">Overridden</span> so it's clear a person corrected it. Either way, the number always stays fully editable.</p>
@@ -461,6 +513,10 @@
       <h3>The Help button used to pulse/glow — why did it stop?</h3>
       <p>That's expected, not a bug. The pulse is a one-time "notice me" cue — the first time you click <code>Help</code> on a given device, it stops for good on that device so it's not distracting once you already know where it is. If you want to see it pulse again (e.g. to double-check it for someone else), open the app in a private/incognito window, a different browser, or clear that device's site data for the app.</p>
     </div>
+    <div class="faq-item">
+      <h3>Can I select more than one type at once on Planning Center Responses?</h3>
+      <p>No — those filter chips are single-select on purpose. Click a type to narrow to it, click it again (or <code>All</code>) to clear it. With as many Planning Center service types as some organizations have, letting chips stack got confusing fast.</p>
+    </div>
   </div>
 </section>
 
@@ -469,6 +525,7 @@
     <div class="foot-links">
       <a href="https://skylinechurchpulse.pages.dev">Open the App</a>
       <a href="index.html">About Skyline Pulse</a>
+      <a href="skyline-pulse-guide.pdf" download>Download Guide (PDF)</a>
       <a href="https://github.com/bstef/skylinechurchpulse">GitHub Repo</a>
       <a href="https://skylinechurchnj.org">Skyline Church NJ</a>
     </div>
