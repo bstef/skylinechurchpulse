@@ -1,0 +1,40 @@
+name: Weekly digest email
+
+# Cron has no DST awareness, so two UTC schedules cover Eastern's two
+# offsets (13:00 UTC = 8am EST, 12:00 UTC = 8am EDT) and the job itself
+# double-checks the actual Eastern clock before sending, in case GitHub's
+# scheduler runs a few minutes late across an hour boundary.
+on:
+  schedule:
+    - cron: "0 13 * * 1"
+    - cron: "0 12 * * 1"
+  workflow_dispatch: {}
+
+jobs:
+  send-digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm it's 8am Eastern
+        id: check
+        run: |
+          hour=$(TZ="America/New_York" date +%H)
+          if [ "$event" = "workflow_dispatch" ] || [ "$hour" = "08" ]; then
+            echo "should_send=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_send=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping — it's $hour:00 Eastern, not 08:00."
+          fi
+        env:
+          event: ${{ github.event_name }}
+
+      - name: Send weekly digest
+        if: steps.check.outputs.should_send == 'true'
+        run: |
+          status=$(curl -s -o /tmp/digest_response.json -w "%{http_code}" \
+            -X POST "https://skylinechurch.tech/api/send-weekly-digest" \
+            -H "X-Digest-Secret: ${{ secrets.DIGEST_CRON_SECRET }}")
+          echo "HTTP status: $status"
+          cat /tmp/digest_response.json
+          if [ "$status" -ge 300 ]; then
+            exit 1
+          fi

@@ -166,3 +166,26 @@ create policy "Allow anon update" on public.production_entries
 drop policy if exists "Allow anon delete" on public.production_entries;
 create policy "Allow anon delete" on public.production_entries
   for delete using (true);
+
+-- Who receives the weekly digest and on-demand "Email report" sends.
+-- Configurable in-app (Exports tab) rather than a fixed list, so the church
+-- can add/remove recipients without a redeploy.
+create table if not exists public.email_recipients (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,
+  created_at timestamptz not null default now()
+);
+
+alter table public.email_recipients enable row level security;
+
+drop policy if exists "Allow anon read" on public.email_recipients;
+create policy "Allow anon read" on public.email_recipients
+  for select using (true);
+
+drop policy if exists "Allow anon insert" on public.email_recipients;
+create policy "Allow anon insert" on public.email_recipients
+  for insert with check (true);
+
+drop policy if exists "Allow anon delete" on public.email_recipients;
+create policy "Allow anon delete" on public.email_recipients
+  for delete using (true);
