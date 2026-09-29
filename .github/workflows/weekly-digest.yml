@@ -30,11 +30,22 @@ jobs:
       - name: Send weekly digest
         if: steps.check.outputs.should_send == 'true'
         run: |
-          status=$(curl -s -o /tmp/digest_response.json -w "%{http_code}" \
+          set -uo pipefail
+          http_code=$(curl -sS -o /tmp/digest_response.json -w "%{http_code}" \
             -X POST "https://skylinechurch.tech/api/send-weekly-digest" \
             -H "X-Digest-Secret: ${{ secrets.DIGEST_CRON_SECRET }}")
-          echo "HTTP status: $status"
-          cat /tmp/digest_response.json
-          if [ "$status" -ge 300 ]; then
+          curl_exit=$?
+          echo "curl exit code: $curl_exit"
+          echo "HTTP status: $http_code"
+          cat /tmp/digest_response.json 2>/dev/null || true
+          # A transport failure (DNS/TLS/connection) makes curl exit nonzero
+          # while http_code stays "000" — check curl's own status explicitly
+          # rather than relying only on the HTTP code, so a dropped
+          # connection doesn't silently pass as success.
+          if [ "$curl_exit" -ne 0 ]; then
+            echo "curl failed before completing the request (transport error)."
+            exit 1
+          fi
+          if [ "$http_code" -ge 300 ]; then
             exit 1
           fi

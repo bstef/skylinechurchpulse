@@ -18,6 +18,28 @@ const FROM_ADDRESS = "Skyline Pulse <pulse@skylinechurch.tech>";
 // sent something unintended (e.g. a raw file instead of base64).
 const MAX_CONTENT_BASE64_CHARS = 15_000_000;
 
+// Unlike this app's other endpoints, a call here has a real cost (a Resend
+// send) and can damage the verified sender domain's reputation if abused —
+// there's no login to gate it behind, so this is a same-origin check: it
+// stops casual scanners/bots hitting the URL directly, though (being an
+// Origin header) it isn't cryptographically strong against a deliberate
+// attacker. Pair with a Cloudflare Rate Limiting Rule on this path (see
+// README's Email integration section) for real abuse resistance.
+function isAllowedOrigin(request) {
+  const origin = request.headers.get("Origin");
+  if (!origin) return false;
+  let hostname;
+  try {
+    hostname = new URL(origin).hostname;
+  } catch (err) {
+    return false;
+  }
+  return hostname === "skylinechurch.tech"
+    || hostname.endsWith(".skylinechurch.tech")
+    || hostname === "skylinechurchpulse.pages.dev"
+    || hostname.endsWith(".skylinechurchpulse.pages.dev");
+}
+
 async function fetchRecipients(supabaseUrl, supabaseAnonKey) {
   const res = await fetch(`${supabaseUrl}/rest/v1/email_recipients?select=email`, {
     headers: {
@@ -34,6 +56,9 @@ export async function onRequestPost(context) {
   const { RESEND_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY } = context.env;
   if (!RESEND_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
     return json({ error: "Email isn't configured yet (missing RESEND_API_KEY, SUPABASE_URL, or SUPABASE_ANON_KEY)." }, 500);
+  }
+  if (!isAllowedOrigin(context.request)) {
+    return json({ error: "Forbidden" }, 403);
   }
 
   let body;

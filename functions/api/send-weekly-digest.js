@@ -67,8 +67,14 @@ export async function onRequestPost(context) {
     return json({ error: "No recipients configured — nothing sent." }, 200);
   }
 
-  const entries = Array.isArray(entriesResult) ? entriesResult : [];
-  const production = Array.isArray(productionResult) ? productionResult : [];
+  // A failed Supabase query is materially different from "nothing logged
+  // this week" — render an explicit unavailable state for that section
+  // instead of silently defaulting to zero, same as the Planning Center
+  // section already does when /api/pco-stats fails.
+  const entriesAvailable = Array.isArray(entriesResult);
+  const productionAvailable = Array.isArray(productionResult);
+  const entries = entriesAvailable ? entriesResult : [];
+  const production = productionAvailable ? productionResult : [];
   const sundayEntries = entries.filter(e => e.service_type !== "SkyYouth");
   const skyYouthEntries = entries.filter(e => e.service_type === "SkyYouth");
   const serving = statsResult && !statsResult.error ? statsResult.serving : null;
@@ -85,17 +91,21 @@ export async function onRequestPost(context) {
       <p style="color:#666;margin-top:0;">${rangeLabel}</p>
 
       <h3 style="margin-bottom:6px;">Sunday Services</h3>
-      <p>${sundayEntries.length} service${sundayEntries.length === 1 ? "" : "s"} logged.
+      <p>${entriesAvailable
+        ? `${sundayEntries.length} service${sundayEntries.length === 1 ? "" : "s"} logged.
       Avg attendance ${fmtAvg(avg(sundayEntries.map(e => e.attendance)))},
       avg unity ${fmtAvg(avg(sundayEntries.map(e => e.unity)))}/5,
-      avg engagement ${fmtAvg(avg(sundayEntries.map(e => e.engagement)))}/5.</p>
+      avg engagement ${fmtAvg(avg(sundayEntries.map(e => e.engagement)))}/5.`
+        : "Not available this week."}</p>
 
       <h3 style="margin-bottom:6px;">SkyYouth</h3>
-      <p>${skyYouthEntries.length} service${skyYouthEntries.length === 1 ? "" : "s"} logged.
-      Avg attendance ${fmtAvg(avg(skyYouthEntries.map(e => e.attendance)))}.</p>
+      <p>${entriesAvailable
+        ? `${skyYouthEntries.length} service${skyYouthEntries.length === 1 ? "" : "s"} logged.
+      Avg attendance ${fmtAvg(avg(skyYouthEntries.map(e => e.attendance)))}.`
+        : "Not available this week."}</p>
 
       <h3 style="margin-bottom:6px;">Production</h3>
-      <p>${production.length} log${production.length === 1 ? "" : "s"} recorded this week.</p>
+      <p>${productionAvailable ? `${production.length} log${production.length === 1 ? "" : "s"} recorded this week.` : "Not available this week."}</p>
 
       <h3 style="margin-bottom:6px;">Planning Center</h3>
       <p>${serving && !serving.error

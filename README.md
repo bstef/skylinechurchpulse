@@ -201,6 +201,8 @@ Cloudflare Pages Functions can't schedule themselves, so `.github/workflows/week
 
 Without a matching `DIGEST_CRON_SECRET` on both sides, the workflow's request gets a `401` and no digest goes out — check the workflow run's logs first if a Monday digest doesn't arrive. Without `RESEND_API_KEY`, `SUPABASE_URL`, or `SUPABASE_ANON_KEY` configured, both the digest and the Exports page's "✉ Email report" buttons return a clear configuration error instead of failing silently; the rest of the app is unaffected either way.
 
+**Recommended hardening — rate limit the email endpoints:** `send-weekly-digest.js` is already gated by `DIGEST_CRON_SECRET`, but `send-report-email.js` has no login to check credentials against (matching this app's no-auth model) — it only rejects requests whose `Origin` isn't this site, which stops casual scanners but not a deliberate direct request. Since a call to either endpoint costs a real Resend send and could affect the verified domain's reputation if abused, add a [Cloudflare Rate Limiting Rule](https://developers.cloudflare.com/waf/rate-limiting-rules/) (available on the free plan) for `/api/send-report-email` and `/api/send-weekly-digest` — e.g. a handful of requests per IP per hour is more than any real usage of these buttons needs.
+
 ### 6. (Optional) Custom domain
 In the Pages project → **Custom domains** → add something like `pulse.skylinechurchnj.org` if you own that domain and it's on Cloudflare DNS.
 
