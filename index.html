@@ -390,6 +390,7 @@ const ANALYTICS_VIEWS = ["analytics", "production-analytics", "skyyouth-analytic
 let sb = null;
 let entries = [];
 let productionEntries = [];
+let emailRecipients = [];
 let view = "home";
 let page = "home";
 let lastLoggingView = "pco";
@@ -619,6 +620,31 @@ async function removeProductionEntry(id) {
   await loadProductionEntries();
 }
 
+async function loadEmailRecipients() {
+  if (!configured()) return;
+  const { data, error } = await sb.from("email_recipients").select("*").order("created_at", { ascending: true });
+  if (error) { showError("Couldn't load email recipients: " + error.message); return; }
+  emailRecipients = data;
+  render();
+}
+
+async function addEmailRecipient(email) {
+  const { error } = await sb.from("email_recipients").insert([{ email }]);
+  if (error) {
+    showError(error.code === "23505" ? `${email} is already on the list.` : "Couldn't save: " + error.message);
+    return false;
+  }
+  showError("");
+  await loadEmailRecipients();
+  return true;
+}
+
+async function removeEmailRecipient(id) {
+  const { error } = await sb.from("email_recipients").delete().eq("id", id);
+  if (error) { showError("Couldn't remove: " + error.message); return; }
+  await loadEmailRecipients();
+}
+
 function destroyCharts() { charts.forEach(c => c.destroy()); charts = []; }
 
 function printReport(targetView) {
@@ -815,6 +841,19 @@ function render() {
     document.getElementById("print-services-analytics").addEventListener("click", () => printReport("analytics"));
     document.getElementById("print-production-analytics").addEventListener("click", () => printReport("production-analytics"));
     document.getElementById("print-skyyouth-analytics").addEventListener("click", () => printReport("skyyouth-analytics"));
+    document.getElementById("email-services-report").addEventListener("click", (e) => emailReport("services", e.currentTarget));
+    document.getElementById("email-production-report").addEventListener("click", (e) => emailReport("production", e.currentTarget));
+    document.getElementById("email-skyyouth-report").addEventListener("click", (e) => emailReport("skyyouth", e.currentTarget));
+    document.getElementById("add-recipient-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = document.getElementById("recipient-email");
+      const email = input.value.trim();
+      if (!email) return;
+      await addEmailRecipient(email);
+    });
+    content.querySelectorAll(".recipient-del-btn").forEach(btn => {
+      btn.addEventListener("click", () => removeEmailRecipient(btn.dataset.id));
+    });
     return;
   }
 
@@ -1050,6 +1089,81 @@ function exportProductionPDF() {
     ]),
   });
   doc.save(`skyline-pulse-production-${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
+// Reuses the exact same jsPDF table-building code as the download buttons
+// above, so the emailed report always matches what "⬇ PDF (table)" would
+// have produced — just sent as a Resend attachment instead of saved locally.
+function buildReportPdf(dataset) {
+  if (dataset === "services") {
+    if (!entries.length) return null;
+    const doc = pdfDoc("Services");
+    addServicesTable(doc, entries);
+    return doc;
+  }
+  if (dataset === "skyyouth") {
+    const data = skyYouthEntries();
+    if (!data.length) return null;
+    const doc = pdfDoc("SkyYouth");
+    addServicesTable(doc, data);
+    return doc;
+  }
+  if (dataset === "production") {
+    if (!productionEntries.length) return null;
+    const doc = pdfDoc("Production");
+    doc.autoTable({
+      startY: 26,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [40, 118, 255] },
+      head: [["Date", "Service", ...PRODUCTION_ROLES.map(r => r.label), "Slides Grade", "Slide Misses", "Camera Direction", "Logged By", "Notes"]],
+      body: productionEntries.map(e => [
+        fmtDate(e.service_date), e.service_type,
+        ...PRODUCTION_ROLES.map(r => e[`${r.key}_present`] ? (e[`${r.key}_name`] ? `Y (${e[`${r.key}_name`]})` : "Y") : "N"),
+        e.slides_grade ?? 1, e.slides_miss_count ?? 0, e.camera_direction_fit ? "Y" : "N",
+        e.logged_by || "", e.notes || "",
+      ]),
+    });
+    return doc;
+  }
+  return null;
+}
+
+function pdfBase64(doc) {
+  return doc.output("datauristring").split("base64,").pop();
+}
+
+async function emailReport(dataset, btn) {
+  if (emailRecipients.length === 0) {
+    showError("Add at least one recipient below before emailing a report.");
+    return;
+  }
+  const doc = buildReportPdf(dataset);
+  if (!doc) return;
+
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Sending…";
+  try {
+    const res = await fetch("/api/send-report-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dataset,
+        filename: `skyline-pulse-${dataset}-${new Date().toISOString().slice(0,10)}.pdf`,
+        contentType: "application/pdf",
+        contentBase64: pdfBase64(doc),
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || `Failed (${res.status})`);
+    showError("");
+    btn.textContent = `✓ Sent to ${body.sent_to}`;
+  } catch (err) {
+    showError("Couldn't email report: " + err.message);
+    btn.textContent = "✗ Failed";
+  } finally {
+    setTimeout(() => { btn.textContent = originalLabel; btn.disabled = false; }, 2500);
+  }
 }
 
 // The landing page — a welcoming overview with headline stats and a jump-off
@@ -1382,7 +1496,7 @@ function renderExports() {
     <div class="pco-header">
       <div>
         <h3 class="display" style="margin:0 0 4px;">Exports</h3>
-        <div style="color:var(--muted);font-size:13px;">Download your data as CSV or PDF, or print a chart report to save as PDF.</div>
+        <div style="color:var(--muted);font-size:13px;">Download your data as CSV or PDF, print a chart report to save as PDF, or email a report to the list below.</div>
       </div>
     </div>
     <div class="export-grid">
@@ -1392,6 +1506,7 @@ function renderExports() {
         <div class="export-actions">
           <button class="btn-secondary" id="export-services-csv" ${entries.length === 0 ? "disabled" : ""}>⬇ CSV</button>
           <button class="btn-secondary" id="export-services-pdf" ${entries.length === 0 ? "disabled" : ""}>⬇ PDF (table)</button>
+          <button class="btn-secondary" id="email-services-report" ${entries.length === 0 ? "disabled" : ""}>✉ Email report</button>
           <button class="btn-secondary" id="print-services-analytics">Print Services Analytics report</button>
         </div>
       </div>
@@ -1401,6 +1516,7 @@ function renderExports() {
         <div class="export-actions">
           <button class="btn-secondary" id="export-production-csv" ${productionEntries.length === 0 ? "disabled" : ""}>⬇ CSV</button>
           <button class="btn-secondary" id="export-production-pdf" ${productionEntries.length === 0 ? "disabled" : ""}>⬇ PDF (table)</button>
+          <button class="btn-secondary" id="email-production-report" ${productionEntries.length === 0 ? "disabled" : ""}>✉ Email report</button>
           <button class="btn-secondary" id="print-production-analytics">Print Production Analytics report</button>
         </div>
       </div>
@@ -1410,9 +1526,28 @@ function renderExports() {
         <div class="export-actions">
           <button class="btn-secondary" id="export-skyyouth-csv" ${skyYouthEntries().length === 0 ? "disabled" : ""}>⬇ CSV</button>
           <button class="btn-secondary" id="export-skyyouth-pdf" ${skyYouthEntries().length === 0 ? "disabled" : ""}>⬇ PDF (table)</button>
+          <button class="btn-secondary" id="email-skyyouth-report" ${skyYouthEntries().length === 0 ? "disabled" : ""}>✉ Email report</button>
           <button class="btn-secondary" id="print-skyyouth-analytics">Print SkyYouth Analytics report</button>
         </div>
       </div>
+    </div>
+    <div class="card" style="margin-top:24px;">
+      <h3 class="display">Email Recipients</h3>
+      <div style="color:var(--muted);font-size:13px;margin:-8px 0 16px;">Who gets "Email report" sends above and the automatic Monday morning weekly digest.</div>
+      <form id="add-recipient-form" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+        <label class="field" style="flex:1;min-width:220px;"><span>Email address</span>
+          <input type="email" id="recipient-email" placeholder="name@example.com" required>
+        </label>
+        <button class="btn-primary" type="submit">+ Add</button>
+      </form>
+      ${emailRecipients.length ? `
+      <div class="logger-list">
+        ${emailRecipients.map(r => `
+          <div class="logger-row">
+            <span class="logger-name">${escapeHtml(r.email)}</span>
+            <button class="btn-secondary recipient-del-btn" data-id="${r.id}" style="padding:4px 10px;">Remove</button>
+          </div>`).join("")}
+      </div>` : `<div style="color:var(--muted);font-size:13px;margin-top:12px;">No recipients yet — add one above.</div>`}
     </div>
   `;
 }
@@ -2367,6 +2502,7 @@ if (configured()) {
   loadEntries();
   loadPcoPlans();
   loadProductionEntries();
+  loadEmailRecipients();
 } else {
   render();
 }

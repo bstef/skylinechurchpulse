@@ -174,10 +174,39 @@ Every signup in a Plan's team lands in exactly one bucket — **confirmed**, **d
 
 **Planning Center Responses tab (optional, no extra setup):** the **Serving** tab (under Logging) drills into the same Serving data one level deeper than Church Stats' summary — one card per Plan, showing exactly who's **Needs Response**, **Declined**, or **Confirmed** for that plan's team, so you don't have to dig through Planning Center's own matrix view to find who hasn't answered yet. It shares `churchStats.serving` with the Church Stats page (`serving.plans`, the next 3 weeks), so that part is fetched once and both views stay in sync — this tab additionally shows history via `serving.past_plans` and its own `↓ Load older services` button (same pattern as the Sunday Services/SkyYouth Plans lists), which never affects the Responded/Needs Response counts since those are about upcoming scheduling gaps specifically. A row of filter chips at the top (same pattern as the Plans lists) lets you narrow down to one Planning Center service type; cards are grouped into one section per type actually present (not a fixed "Sunday Services" heading, since plenty of PCO Service Types — children's check-in, assimilation, etc. — aren't Sunday-only), with no filter selected (**All**) showing one section per type. Note this filters/groups by whole Plan, not individual service time: a multi-time folder like `Celebration Service` (9:30/11:00 as one Plan with two Plan Times) shows as a single group, since Planning Center tracks serving teams at the Plan level — unlike attendance, there's no separate per-time breakdown to group by there. Folders with one service per Plan (like `SkyYouth`) group cleanly.
 
-### 5. (Optional) Custom domain
+### 5. Email integration (Resend, optional)
+
+The **Exports** page can email a report on demand and also sends an automatic weekly digest (Monday 8am Eastern) summarizing what got logged, who's still owed a serving response, and the latest Check-Ins headcount. Both go out from `pulse@skylinechurch.tech` via [Resend](https://resend.com) to whichever addresses are added under **Exports → Email Recipients** (stored in the `email_recipients` table from `db/schema.sql` — no fixed/hardcoded list).
+
+**Set up Resend:**
+
+1. In your Resend account, verify the sending domain (`skylinechurch.tech`) under **Domains**, if it isn't already — the from-address above needs that domain verified before Resend will deliver from it.
+2. **API Keys** → create a key with **Sending access**.
+
+**Set the Cloudflare Pages secrets:**
+
+1. Pages project → **Settings → Variables and Secrets** → **Add**.
+2. Add these as type **Secret**, for both Production and Preview environments:
+   - `RESEND_API_KEY` — the key from above.
+   - `DIGEST_CRON_SECRET` — any long random string you generate; it's just a shared secret between GitHub Actions and the digest endpoint, not a Resend value.
+   - `SUPABASE_URL` and `SUPABASE_ANON_KEY` — the **same values** from step 1/2 above. These two Functions read Supabase directly (to look up recipients, and for the digest, recent entries) rather than through the browser, so they need their own copy of the same credentials `index.html` uses — set as secrets here instead of hardcoded, so secret scanners don't flag a duplicated key and there's one place to rotate it.
+3. Redeploy so the functions (`functions/api/send-report-email.js`, `functions/api/send-weekly-digest.js`) pick them up.
+
+**Set the GitHub Actions secret (for the weekly digest cron):**
+
+Cloudflare Pages Functions can't schedule themselves, so `.github/workflows/weekly-digest.yml` cron-triggers the send every Monday by calling the deployed endpoint over HTTPS.
+
+1. GitHub repo → **Settings → Secrets and variables → Actions** → **New repository secret**.
+2. Add `DIGEST_CRON_SECRET` set to the **exact same value** you used for the Cloudflare Pages secret above — the workflow sends it as an `X-Digest-Secret` header, and the function rejects any request whose header doesn't match.
+
+Without a matching `DIGEST_CRON_SECRET` on both sides, the workflow's request gets a `401` and no digest goes out — check the workflow run's logs first if a Monday digest doesn't arrive. Without `RESEND_API_KEY`, `SUPABASE_URL`, or `SUPABASE_ANON_KEY` configured, both the digest and the Exports page's "✉ Email report" buttons return a clear configuration error instead of failing silently; the rest of the app is unaffected either way.
+
+**Recommended hardening — rate limit the email endpoints:** `send-weekly-digest.js` is already gated by `DIGEST_CRON_SECRET`, but `send-report-email.js` has no login to check credentials against (matching this app's no-auth model) — it only rejects requests whose `Origin` isn't this site, which stops casual scanners but not a deliberate direct request. Since a call to either endpoint costs a real Resend send and could affect the verified domain's reputation if abused, add a [Cloudflare Rate Limiting Rule](https://developers.cloudflare.com/waf/rate-limiting-rules/) (available on the free plan) for `/api/send-report-email` and `/api/send-weekly-digest` — e.g. a handful of requests per IP per hour is more than any real usage of these buttons needs.
+
+### 6. (Optional) Custom domain
 In the Pages project → **Custom domains** → add something like `pulse.skylinechurchnj.org` if you own that domain and it's on Cloudflare DNS.
 
-### 6. Share it
+### 7. Share it
 Send the `.pages.dev` (or custom) URL to the pastor and worship leader. No login required — anyone with the link can add or view entries; a "Logged by" field just tracks who entered a given day's numbers.
 
 ## Notes
