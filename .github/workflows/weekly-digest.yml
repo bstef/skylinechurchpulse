@@ -31,12 +31,15 @@ jobs:
         if: steps.check.outputs.should_send == 'true'
         run: |
           set -uo pipefail
-          http_code=$(curl -sS -o /tmp/digest_response.json -w "%{http_code}" \
+          http_code=$(curl -sS -D /tmp/digest_headers.txt -o /tmp/digest_response.json -w "%{http_code}" \
             -X POST "https://skylinechurch.tech/api/send-weekly-digest" \
             -H "X-Digest-Secret: ${{ secrets.DIGEST_CRON_SECRET }}")
           curl_exit=$?
           echo "curl exit code: $curl_exit"
           echo "HTTP status: $http_code"
+          echo "--- response headers ---"
+          cat /tmp/digest_headers.txt 2>/dev/null || true
+          echo "--- response body ---"
           cat /tmp/digest_response.json 2>/dev/null || true
           # A transport failure (DNS/TLS/connection) makes curl exit nonzero
           # while http_code stays "000" — check curl's own status explicitly
