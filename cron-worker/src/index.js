@@ -128,7 +128,15 @@ export default {
   async scheduled(event, env, ctx) {
     const hour = new Intl.DateTimeFormat("en-US", { hour: "2-digit", hour12: false, timeZone: "America/New_York" }).format(new Date());
     if (hour !== "08") return;
-    ctx.waitUntil(sendDigest(env));
+    // sendDigest() resolves (never rejects) even on failure — a plain
+    // waitUntil(sendDigest(env)) would make a failed send look like a
+    // successful scheduled run in Cloudflare's logs, with no error and no
+    // way to notice a Monday digest silently didn't go out. Throw so the
+    // invocation actually shows up as failed.
+    ctx.waitUntil((async () => {
+      const result = await sendDigest(env);
+      if (!result.ok) throw new Error(result.error || "sendDigest failed");
+    })());
   },
 
   // Manual test path — hits this Worker's own workers.dev URL directly,
