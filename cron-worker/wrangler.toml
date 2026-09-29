@@ -1,0 +1,10 @@
+name = "skyline-pulse-weekly-digest"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+# Cron has no DST awareness, so two UTC schedules cover Eastern's two
+# offsets (13:00 UTC = 8am EST, 12:00 UTC = 8am EDT) — the handler itself
+# double-checks the actual Eastern clock before sending, so only one of
+# the two firings each Monday actually results in an email.
+[triggers]
+crons = ["0 13 * * 1", "0 12 * * 1"]

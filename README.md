@@ -176,32 +176,45 @@ Every signup in a Plan's team lands in exactly one bucket — **confirmed**, **d
 
 ### 5. Email integration (Resend, optional)
 
-The **Exports** page can email a report on demand and also sends an automatic weekly digest (Monday 8am Eastern) summarizing what got logged, who's still owed a serving response, and the latest Check-Ins headcount. Both go out from `pulse@skylinechurch.tech` via [Resend](https://resend.com) to whichever addresses are added under **Exports → Email Recipients** (stored in the `email_recipients` table from `db/schema.sql` — no fixed/hardcoded list).
+The **Exports** page can email a report on demand, and a separate scheduled job sends an automatic weekly digest (Monday 8am Eastern) summarizing what got logged that week. Both go out from `pulse@skylinechurch.tech` via [Resend](https://resend.com) to whichever addresses are added under **Exports → Email Recipients** (stored in the `email_recipients` table from `db/schema.sql` — no fixed/hardcoded list).
 
 **Set up Resend:**
 
 1. In your Resend account, verify the sending domain (`skylinechurch.tech`) under **Domains**, if it isn't already — the from-address above needs that domain verified before Resend will deliver from it.
-2. **API Keys** → create a key with **Sending access**.
+2. **API Keys** → create a key with **Sending access**. You'll use this same key in both places below.
 
-**Set the Cloudflare Pages secrets:**
+**On-demand "Email report" (Cloudflare Pages secrets):**
 
 1. Pages project → **Settings → Variables and Secrets** → **Add**.
 2. Add these as type **Secret**, for both Production and Preview environments:
    - `RESEND_API_KEY` — the key from above.
-   - `DIGEST_CRON_SECRET` — any long random string you generate; it's just a shared secret between GitHub Actions and the digest endpoint, not a Resend value.
-   - `SUPABASE_URL` and `SUPABASE_ANON_KEY` — the **same values** from step 1/2 above. These two Functions read Supabase directly (to look up recipients, and for the digest, recent entries) rather than through the browser, so they need their own copy of the same credentials `index.html` uses — set as secrets here instead of hardcoded, so secret scanners don't flag a duplicated key and there's one place to rotate it.
-3. Redeploy so the functions (`functions/api/send-report-email.js`, `functions/api/send-weekly-digest.js`) pick them up.
+   - `SUPABASE_URL` and `SUPABASE_ANON_KEY` — the **same values** from step 1/2 of the Supabase setup above. `send-report-email.js` reads Supabase directly (to look up recipients) rather than through the browser, so it needs its own copy of the same credentials `index.html` uses — set as a secret here instead of hardcoded, so secret scanners don't flag a duplicated key and there's one place to rotate it.
+3. Redeploy so `functions/api/send-report-email.js` picks them up.
 
-**Set the GitHub Actions secret (for the weekly digest cron):**
+**Recommended hardening:** `send-report-email.js` has no login to check credentials against (matching this app's no-auth model) — it only rejects requests whose `Origin` isn't this site, which stops casual scanners but not a deliberate direct request. Since a call to it costs a real Resend send and could affect the verified domain's reputation if abused, consider adding a [Cloudflare Rate Limiting Rule](https://developers.cloudflare.com/waf/rate-limiting-rules/) (available on the free plan) for `/api/send-report-email` — e.g. a handful of requests per IP per hour is more than any real usage of the button needs.
 
-Cloudflare Pages Functions can't schedule themselves, so `.github/workflows/weekly-digest.yml` cron-triggers the send every Monday by calling the deployed endpoint over HTTPS.
+**Automatic weekly digest (standalone Cloudflare Worker):**
 
-1. GitHub repo → **Settings → Secrets and variables → Actions** → **New repository secret**.
-2. Add `DIGEST_CRON_SECRET` set to the **exact same value** you used for the Cloudflare Pages secret above — the workflow sends it as an `X-Digest-Secret` header, and the function rejects any request whose header doesn't match.
+This is deployed separately from the Pages project, as its own Cloudflare Worker with a native Cron Trigger, from the `cron-worker/` directory. That's deliberate, not incidental: if this site sits behind a Cloudflare Access policy (Zero Trust) covering the whole domain, an external HTTP call — including a scheduled call from GitHub Actions or any other outside service — hits Access's login page and can never get through non-interactively. A Worker's own Cron Trigger runs *inside* Cloudflare's infrastructure on a schedule; it's not an inbound request to the protected zone at all, so it works regardless of what Access policy is (or isn't) protecting the site, and nothing about that policy needs to change.
 
-Without a matching `DIGEST_CRON_SECRET` on both sides, the workflow's request gets a `401` and no digest goes out — check the workflow run's logs first if a Monday digest doesn't arrive. Without `RESEND_API_KEY`, `SUPABASE_URL`, or `SUPABASE_ANON_KEY` configured, both the digest and the Exports page's "✉ Email report" buttons return a clear configuration error instead of failing silently; the rest of the app is unaffected either way.
+1. Install [`wrangler`](https://developers.cloudflare.com/workers/wrangler/) if you don't have it, and run `wrangler login` once.
+2. From the `cron-worker/` directory, set its secrets (this Worker has its own secret store, separate from the Pages project — same values as above, plus a new one for manual testing):
+   ```
+   wrangler secret put RESEND_API_KEY
+   wrangler secret put SUPABASE_URL
+   wrangler secret put SUPABASE_ANON_KEY
+   wrangler secret put DIGEST_TEST_SECRET
+   ```
+   (`DIGEST_TEST_SECRET` is any random string you generate — it only guards the Worker's own manual-test URL, described below.)
+3. `wrangler deploy` from `cron-worker/`. This also registers the Cron Trigger declared in `cron-worker/wrangler.toml` (two schedules covering Eastern's DST offsets — the handler itself checks the actual Eastern hour before sending, so only one results in an email).
 
-**Recommended hardening — rate limit the email endpoints:** `send-weekly-digest.js` is already gated by `DIGEST_CRON_SECRET`, but `send-report-email.js` has no login to check credentials against (matching this app's no-auth model) — it only rejects requests whose `Origin` isn't this site, which stops casual scanners but not a deliberate direct request. Since a call to either endpoint costs a real Resend send and could affect the verified domain's reputation if abused, add a [Cloudflare Rate Limiting Rule](https://developers.cloudflare.com/waf/rate-limiting-rules/) (available on the free plan) for `/api/send-report-email` and `/api/send-weekly-digest` — e.g. a handful of requests per IP per hour is more than any real usage of these buttons needs.
+Note the digest sent this way summarizes Services/Production/SkyYouth logged that week, but doesn't include the Planning Center "needs response" section the in-app pages show — reaching that would mean either duplicating the Planning Center API calls a third time or calling back through the (potentially Access-protected) `/api/pco-stats`, so the email links into the app for that instead.
+
+**Testing it without waiting for Monday:** the Worker also gets its own `*.workers.dev` URL (shown after `wrangler deploy`), which is a different domain than `skylinechurch.tech`/`.pages.dev` and so isn't covered by an Access policy scoped to those. Test with:
+```
+curl -X POST "https://skyline-pulse-weekly-digest.<your-subdomain>.workers.dev" \
+  -H "X-Digest-Secret: <your DIGEST_TEST_SECRET value>"
+```
 
 ### 6. (Optional) Custom domain
 In the Pages project → **Custom domains** → add something like `pulse.skylinechurchnj.org` if you own that domain and it's on Cloudflare DNS.
