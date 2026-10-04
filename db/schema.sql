@@ -222,3 +222,8 @@ create policy "Allow anon insert" on public.email_log
 drop policy if exists "Allow anon delete" on public.email_log;
 create policy "Allow anon delete" on public.email_log
   for delete using (true);
+
+-- Lets "Recent Emails" open an actual preview of what was sent, not just
+-- metadata. Safe to re-run on a database that already has the table.
+alter table public.email_log
+  add column if not exists html_body text;

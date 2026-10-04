@@ -26,6 +26,13 @@ const FROM_ADDRESS = "Skyline Pulse <pulse@skylinechurch.tech>";
 const DIGEST_WINDOW_DAYS = 7;
 const APP_URL = "https://skylinechurch.tech";
 const PLANNING_CENTER_URL = "https://services.planningcenteronline.com/dashboard/0";
+// Used only for the archived copy stored in email_log (see sendDigest),
+// swapped in for the cid: reference before saving — someone viewing the
+// preview in the app is already past whatever's protecting the site, so a
+// normal URL works fine there even though it can't be used in the actual
+// sent email. Keeps archived rows from needing their own copy of the
+// 185KB logo on every single send.
+const LOGO_URL = "https://skylinechurch.tech/assets/SkylinePulseLight-removebg-preview.png";
 // Embedded (not fetched from skylinechurch.tech) because the church's
 // Cloudflare Access policy blocks external, non-interactive requests to
 // that whole domain — an email client loading a remote <img> is exactly
@@ -71,7 +78,7 @@ function fmtAvgInt(n) { return n == null ? "—" : Math.round(n).toString(); }
 
 // Records that a send happened (or failed) so it's visible on the Exports
 // page — best-effort: a logging failure shouldn't fail the actual send.
-async function logEmailSend(supabaseUrl, supabaseAnonKey, { kind, dataset, subject, recipients, status, error }) {
+async function logEmailSend(supabaseUrl, supabaseAnonKey, { kind, dataset, subject, recipients, status, error, htmlBody }) {
   try {
     await fetch(`${supabaseUrl}/rest/v1/email_log`, {
       method: "POST",
@@ -89,6 +96,7 @@ async function logEmailSend(supabaseUrl, supabaseAnonKey, { kind, dataset, subje
         recipient_count: recipients.length,
         status,
         error: error || null,
+        html_body: htmlBody || null,
       }),
     });
   } catch (err) {
@@ -236,15 +244,16 @@ async function sendDigest(env) {
   });
 
   await pruneOldEmailLogs(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const archivedHtml = html.replace(`cid:${LOGO_CID}`, LOGO_URL);
 
   if (!resendRes.ok) {
     const errBody = await resendRes.json().catch(() => ({}));
     const error = errBody.message || `Resend error (${resendRes.status})`;
-    await logEmailSend(SUPABASE_URL, SUPABASE_ANON_KEY, { kind: "weekly_digest", subject, recipients, status: "failed", error });
+    await logEmailSend(SUPABASE_URL, SUPABASE_ANON_KEY, { kind: "weekly_digest", subject, recipients, status: "failed", error, htmlBody: archivedHtml });
     return { ok: false, error };
   }
 
-  await logEmailSend(SUPABASE_URL, SUPABASE_ANON_KEY, { kind: "weekly_digest", subject, recipients, status: "sent" });
+  await logEmailSend(SUPABASE_URL, SUPABASE_ANON_KEY, { kind: "weekly_digest", subject, recipients, status: "sent", htmlBody: archivedHtml });
   return { ok: true, sent_to: recipients.length };
 }
 
