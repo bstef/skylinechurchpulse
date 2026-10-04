@@ -391,6 +391,7 @@ let sb = null;
 let entries = [];
 let productionEntries = [];
 let emailRecipients = [];
+let emailLog = [];
 let view = "home";
 let page = "home";
 let lastLoggingView = "pco";
@@ -526,6 +527,9 @@ function fmtDate(d) {
   const dt = new Date(d + "T12:00:00");
   return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
+function fmtDateTime(iso) {
+  return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
 function avg(arr) { return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
 function pctTrueIn(arr, field) { return arr.length ? Math.round(100 * arr.filter(e => e[field]).length / arr.length) : 0; }
 function pctTrue(field) { return pctTrueIn(entries, field); }
@@ -643,6 +647,18 @@ async function removeEmailRecipient(id) {
   const { error } = await sb.from("email_recipients").delete().eq("id", id);
   if (error) { showError("Couldn't remove: " + error.message); return; }
   await loadEmailRecipients();
+}
+
+// Read-only — rows are written by functions/api/send-report-email.js and
+// cron-worker/src/index.js, not from the browser. Just the most recent
+// handful; email_log is pruned to 90 days' worth anyway so this never grows
+// large, but there's no reason to pull more than fits on one screen.
+async function loadEmailLog() {
+  if (!configured()) return;
+  const { data, error } = await sb.from("email_log").select("*").order("sent_at", { ascending: false }).limit(20);
+  if (error) { showError("Couldn't load email log: " + error.message); return; }
+  emailLog = data;
+  render();
 }
 
 function destroyCharts() { charts.forEach(c => c.destroy()); charts = []; }
@@ -1162,6 +1178,7 @@ async function emailReport(dataset, btn) {
     showError("Couldn't email report: " + err.message);
     btn.textContent = "✗ Failed";
   } finally {
+    loadEmailLog();
     setTimeout(() => { btn.textContent = originalLabel; btn.disabled = false; }, 2500);
   }
 }
@@ -1549,7 +1566,25 @@ function renderExports() {
           </div>`).join("")}
       </div>` : `<div style="color:var(--muted);font-size:13px;margin-top:12px;">No recipients yet — add one above.</div>`}
     </div>
+    <div class="card" style="margin-top:24px;">
+      <h3 class="display">Recent Emails</h3>
+      <div style="color:var(--muted);font-size:13px;margin:-8px 0 16px;">The last ${emailLog.length} sends — both "Email report" and the weekly digest. Kept for 90 days.</div>
+      ${emailLog.length ? `
+      <div class="logger-list">
+        ${emailLog.map(e => `
+          <div class="logger-row" title="${e.status === "failed" && e.error ? escapeHtml(e.error) : ""}">
+            <span class="logger-name">${e.status === "sent" ? "✓" : "✗"} ${escapeHtml(emailLogLabel(e))}</span>
+            <span class="logger-meta">${fmtDateTime(e.sent_at)} · ${e.recipient_count} recipient${e.recipient_count === 1 ? "" : "s"}</span>
+          </div>`).join("")}
+      </div>` : `<div style="color:var(--muted);font-size:13px;margin-top:12px;">Nothing sent yet.</div>`}
+    </div>
   `;
+}
+
+function emailLogLabel(e) {
+  if (e.kind === "weekly_digest") return "Weekly Digest";
+  const dataset = e.dataset || "";
+  return `${dataset.charAt(0).toUpperCase()}${dataset.slice(1)} Report`;
 }
 
 function renderAnalyticsShell(data = entries, opts = {}) {
@@ -2503,6 +2538,7 @@ if (configured()) {
   loadPcoPlans();
   loadProductionEntries();
   loadEmailRecipients();
+  loadEmailLog();
 } else {
   render();
 }

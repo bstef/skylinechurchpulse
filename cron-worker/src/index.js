@@ -69,6 +69,50 @@ function avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.len
 function fmtAvg(n) { return n == null ? "—" : n.toFixed(1); }
 function fmtAvgInt(n) { return n == null ? "—" : Math.round(n).toString(); }
 
+// Records that a send happened (or failed) so it's visible on the Exports
+// page — best-effort: a logging failure shouldn't fail the actual send.
+async function logEmailSend(supabaseUrl, supabaseAnonKey, { kind, dataset, subject, recipients, status, error }) {
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/email_log`, {
+      method: "POST",
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${supabaseAnonKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({
+        kind,
+        dataset: dataset || null,
+        subject,
+        recipients: recipients.join(", "),
+        recipient_count: recipients.length,
+        status,
+        error: error || null,
+      }),
+    });
+  } catch (err) {
+    // swallow — logging is a nice-to-have, not worth failing the send over
+  }
+}
+
+// Keeps email_log from growing indefinitely (a safety margin well short of
+// any Supabase free-tier concern, since these rows are tiny) — runs after
+// every send, scheduled or manual test alike, so it doesn't depend on a
+// separate schedule of its own.
+const LOG_RETENTION_DAYS = 90;
+async function pruneOldEmailLogs(supabaseUrl, supabaseAnonKey) {
+  try {
+    const cutoff = new Date(Date.now() - LOG_RETENTION_DAYS * 86400000).toISOString();
+    await fetch(`${supabaseUrl}/rest/v1/email_log?sent_at=lt.${encodeURIComponent(cutoff)}`, {
+      method: "DELETE",
+      headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}`, Prefer: "return=minimal" },
+    });
+  } catch (err) {
+    // best-effort cleanup — a failure here just means next run tries again
+  }
+}
+
 // One stat block per dataset — icon + label, then the line of numbers,
 // separated by a thin rule except after the last one.
 function digestSection(icon, label, body, isLast) {
@@ -175,6 +219,7 @@ async function sendDigest(env) {
   const skyYouthEntries = entries.filter(e => e.service_type === "SkyYouth");
 
   const rangeLabel = `${new Date(sinceIso + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+  const subject = `Skyline Pulse — Weekly Digest (${rangeLabel})`;
 
   const html = buildDigestHtml({ rangeLabel, entriesAvailable, productionAvailable, sundayEntries, skyYouthEntries, production });
 
@@ -184,17 +229,22 @@ async function sendDigest(env) {
     body: JSON.stringify({
       from: FROM_ADDRESS,
       to: recipients,
-      subject: `Skyline Pulse — Weekly Digest (${rangeLabel})`,
+      subject,
       html,
       attachments: [{ content: LOGO_BASE64, filename: "skyline-pulse-logo.png", content_type: "image/png", content_id: LOGO_CID }],
     }),
   });
 
+  await pruneOldEmailLogs(SUPABASE_URL, SUPABASE_ANON_KEY);
+
   if (!resendRes.ok) {
     const errBody = await resendRes.json().catch(() => ({}));
-    return { ok: false, error: errBody.message || `Resend error (${resendRes.status})` };
+    const error = errBody.message || `Resend error (${resendRes.status})`;
+    await logEmailSend(SUPABASE_URL, SUPABASE_ANON_KEY, { kind: "weekly_digest", subject, recipients, status: "failed", error });
+    return { ok: false, error };
   }
 
+  await logEmailSend(SUPABASE_URL, SUPABASE_ANON_KEY, { kind: "weekly_digest", subject, recipients, status: "sent" });
   return { ok: true, sent_to: recipients.length };
 }
 

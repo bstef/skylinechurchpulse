@@ -189,3 +189,36 @@ create policy "Allow anon insert" on public.email_recipients
 drop policy if exists "Allow anon delete" on public.email_recipients;
 create policy "Allow anon delete" on public.email_recipients
   for delete using (true);
+
+-- A record of every weekly-digest and on-demand "Email report" send, shown
+-- on the Exports page so it's visible that something actually went out (and
+-- when a send failed, why). Rows are tiny — even years of weekly sends stay
+-- well under any Supabase free-tier limit — but functions/send-report-email.js
+-- and cron-worker/src/index.js both prune anything older than ~1 quarter
+-- (90 days) after a successful send anyway, so the table stays lean
+-- regardless.
+create table if not exists public.email_log (
+  id uuid primary key default gen_random_uuid(),
+  sent_at timestamptz not null default now(),
+  kind text not null check (kind in ('weekly_digest', 'report')),
+  dataset text,
+  subject text not null,
+  recipients text not null default '',
+  recipient_count integer not null default 0,
+  status text not null check (status in ('sent', 'failed')),
+  error text
+);
+
+alter table public.email_log enable row level security;
+
+drop policy if exists "Allow anon read" on public.email_log;
+create policy "Allow anon read" on public.email_log
+  for select using (true);
+
+drop policy if exists "Allow anon insert" on public.email_log;
+create policy "Allow anon insert" on public.email_log
+  for insert with check (true);
+
+drop policy if exists "Allow anon delete" on public.email_log;
+create policy "Allow anon delete" on public.email_log
+  for delete using (true);

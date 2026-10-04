@@ -52,6 +52,36 @@ async function fetchRecipients(supabaseUrl, supabaseAnonKey) {
   return rows.map(r => r.email);
 }
 
+// Records that a send happened (or failed) so it's visible on the Exports
+// page — best-effort: a logging failure shouldn't fail the actual send.
+// Shares the email_log table with cron-worker's weekly digest, which also
+// prunes anything older than 90 days, so this function doesn't need its own
+// cleanup pass.
+async function logEmailSend(supabaseUrl, supabaseAnonKey, { dataset, subject, recipients, status, error }) {
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/email_log`, {
+      method: "POST",
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${supabaseAnonKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({
+        kind: "report",
+        dataset,
+        subject,
+        recipients: recipients.join(", "),
+        recipient_count: recipients.length,
+        status,
+        error: error || null,
+      }),
+    });
+  } catch (err) {
+    // swallow — logging is a nice-to-have, not worth failing the send over
+  }
+}
+
 export async function onRequestPost(context) {
   const { RESEND_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY } = context.env;
   if (!RESEND_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
@@ -88,6 +118,7 @@ export async function onRequestPost(context) {
 
   const label = dataset.charAt(0).toUpperCase() + dataset.slice(1);
   const sentDate = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const subject = `Skyline Pulse — ${label} report (${sentDate})`;
 
   let resendRes;
   try {
@@ -100,20 +131,24 @@ export async function onRequestPost(context) {
       body: JSON.stringify({
         from: FROM_ADDRESS,
         to: recipients,
-        subject: `Skyline Pulse — ${label} report (${sentDate})`,
+        subject,
         html: `<p>Attached: the ${label} report exported from Skyline Pulse on ${sentDate}.</p>`,
         attachments: [{ filename, content: contentBase64, content_type: contentType }],
       }),
     });
   } catch (err) {
+    await logEmailSend(SUPABASE_URL, SUPABASE_ANON_KEY, { dataset, subject, recipients, status: "failed", error: err.message });
     return json({ error: "Failed to reach Resend: " + err.message }, 502);
   }
 
   if (!resendRes.ok) {
     const errBody = await resendRes.json().catch(() => ({}));
-    return json({ error: errBody.message || `Resend error (${resendRes.status})` }, resendRes.status);
+    const error = errBody.message || `Resend error (${resendRes.status})`;
+    await logEmailSend(SUPABASE_URL, SUPABASE_ANON_KEY, { dataset, subject, recipients, status: "failed", error });
+    return json({ error }, resendRes.status);
   }
 
+  await logEmailSend(SUPABASE_URL, SUPABASE_ANON_KEY, { dataset, subject, recipients, status: "sent" });
   return json({ ok: true, sent_to: recipients.length });
 }
 

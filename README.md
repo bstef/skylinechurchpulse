@@ -178,6 +178,8 @@ Every signup in a Plan's team lands in exactly one bucket — **confirmed**, **d
 
 The **Exports** page can email a report on demand, and a separate scheduled job sends an automatic weekly digest (Monday 8am Eastern) summarizing what got logged that week. Both go out from `pulse@skylinechurch.tech` via [Resend](https://resend.com) to whichever addresses are added under **Exports → Email Recipients** (stored in the `email_recipients` table from `db/schema.sql` — no fixed/hardcoded list).
 
+Every send — and every failed send, with its error — is logged to the `email_log` table and shown under **Exports → Recent Emails**, so it's visible that something actually went out. Rows are tiny — nowhere near a real storage concern even after years of weekly sends — but `cron-worker/src/index.js` prunes anything older than 90 days after each digest run anyway, so the table stays small regardless.
+
 **Set up Resend:**
 
 1. In your Resend account, verify the sending domain (`skylinechurch.tech`) under **Domains**, if it isn't already — the from-address above needs that domain verified before Resend will deliver from it.
