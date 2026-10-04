@@ -25,6 +25,20 @@
 const FROM_ADDRESS = "Skyline Pulse <pulse@skylinechurch.tech>";
 const DIGEST_WINDOW_DAYS = 7;
 const APP_URL = "https://skylinechurch.tech";
+const PLANNING_CENTER_URL = "https://services.planningcenteronline.com/dashboard/0";
+const LOGO_URL = "https://skylinechurch.tech/assets/SkylinePulseLight-removebg-preview.png";
+
+// Brand palette, lifted from index.html's light-theme CSS variables so the
+// email matches the app instead of inventing its own colors.
+const COLOR = {
+  ink: "#1F2A24",
+  paper: "#F6F3EC",
+  surface: "#FFFFFF",
+  brass: "#B8925A",
+  pew: "#2876FF",
+  line: "#D8D1C0",
+  muted: "#8A8375",
+};
 
 async function fetchRecipients(supabaseUrl, supabaseAnonKey) {
   const res = await fetch(`${supabaseUrl}/rest/v1/email_recipients?select=email`, {
@@ -46,6 +60,87 @@ async function fetchRecentEntries(supabaseUrl, supabaseAnonKey, table, sinceIso)
 
 function avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null; }
 function fmtAvg(n) { return n == null ? "—" : n.toFixed(1); }
+function fmtAvgInt(n) { return n == null ? "—" : Math.round(n).toString(); }
+
+// One stat block per dataset — icon + label, then the line of numbers,
+// separated by a thin rule except after the last one.
+function digestSection(icon, label, body, isLast) {
+  return `
+          <tr>
+            <td style="padding:16px 0;${isLast ? "" : `border-bottom:1px solid ${COLOR.line};`}">
+              <div style="font-size:14px;font-weight:700;color:${COLOR.ink};margin:0 0 4px;">${icon}&nbsp; ${label}</div>
+              <div style="font-size:14px;color:${COLOR.muted};line-height:1.55;">${body}</div>
+            </td>
+          </tr>`;
+}
+
+// Table-based layout (not flex/grid) so this renders consistently across
+// email clients, including Outlook's Word rendering engine. Colors pulled
+// from index.html's light-theme CSS variables (see COLOR above) so the
+// email reads as the same product as the app, not a generic notification.
+function buildDigestHtml({ rangeLabel, entriesAvailable, productionAvailable, sundayEntries, skyYouthEntries, production }) {
+  const sections = [
+    digestSection("🗓️", "Sunday Services", entriesAvailable
+      ? `${sundayEntries.length} service${sundayEntries.length === 1 ? "" : "s"} logged · avg attendance ${fmtAvgInt(avg(sundayEntries.map(e => e.attendance)))} · avg unity ${fmtAvg(avg(sundayEntries.map(e => e.unity)))}/5 · avg engagement ${fmtAvg(avg(sundayEntries.map(e => e.engagement)))}/5`
+      : "Not available this week."),
+    digestSection("🎧", "SkyYouth", entriesAvailable
+      ? `${skyYouthEntries.length} service${skyYouthEntries.length === 1 ? "" : "s"} logged · avg attendance ${fmtAvgInt(avg(skyYouthEntries.map(e => e.attendance)))}`
+      : "Not available this week."),
+    digestSection("🎛️", "Production", productionAvailable
+      ? `${production.length} log${production.length === 1 ? "" : "s"} recorded this week`
+      : "Not available this week."),
+    digestSection("🙋", "Planning Center", `See <a href="${APP_URL}" style="color:${COLOR.pew};">Planning Center Responses in the app</a> for who's still owed a response this week.`, true),
+  ].join("");
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Skyline Pulse — Weekly Digest</title>
+</head>
+<body style="margin:0;padding:0;background-color:${COLOR.paper};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${COLOR.paper};">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:${COLOR.surface};border:1px solid ${COLOR.line};border-radius:12px;overflow:hidden;">
+          <tr>
+            <td style="padding:32px 36px 20px;text-align:center;border-bottom:1px solid ${COLOR.line};">
+              <img src="${LOGO_URL}" width="170" alt="Skyline Pulse" style="display:block;margin:0 auto;height:auto;max-width:170px;border:0;">
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 36px 4px;">
+              <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:${COLOR.brass};margin:0 0 6px;">Weekly Digest</div>
+              <h1 style="margin:0;font-size:21px;font-family:Georgia,'Times New Roman',serif;color:${COLOR.ink};font-weight:700;">${rangeLabel}</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 36px 4px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${sections}</table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:12px 36px 32px;text-align:center;">
+              <a href="${APP_URL}" style="display:inline-block;background-color:${COLOR.pew};color:#FFFFFF;text-decoration:none;font-weight:700;font-size:15px;padding:13px 30px;border-radius:8px;">Open Skyline Pulse →</a>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:${COLOR.paper};padding:22px 36px;text-align:center;border-top:1px solid ${COLOR.line};">
+              <div style="margin:0 0 10px;">
+                <a href="${APP_URL}" style="color:${COLOR.brass};text-decoration:none;font-weight:600;font-size:13px;margin:0 12px;">Open Skyline Pulse</a>
+                <a href="${PLANNING_CENTER_URL}" style="color:${COLOR.brass};text-decoration:none;font-weight:600;font-size:13px;margin:0 12px;">Planning Center</a>
+              </div>
+              <div style="font-size:11px;color:${COLOR.muted};">Skyline Church · NJ &nbsp;·&nbsp; Skyline Pulse Service Ledger &nbsp;·&nbsp; Internal use only</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
 
 async function sendDigest(env) {
   const { RESEND_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY } = env;
@@ -74,33 +169,7 @@ async function sendDigest(env) {
 
   const rangeLabel = `${new Date(sinceIso + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
-  const html = `
-    <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;color:#1a1a2e;">
-      <h2 style="margin-bottom:4px;">Skyline Pulse — Weekly Digest</h2>
-      <p style="color:#666;margin-top:0;">${rangeLabel}</p>
-
-      <h3 style="margin-bottom:6px;">Sunday Services</h3>
-      <p>${entriesAvailable
-        ? `${sundayEntries.length} service${sundayEntries.length === 1 ? "" : "s"} logged.
-      Avg attendance ${fmtAvg(avg(sundayEntries.map(e => e.attendance)))},
-      avg unity ${fmtAvg(avg(sundayEntries.map(e => e.unity)))}/5,
-      avg engagement ${fmtAvg(avg(sundayEntries.map(e => e.engagement)))}/5.`
-        : "Not available this week."}</p>
-
-      <h3 style="margin-bottom:6px;">SkyYouth</h3>
-      <p>${entriesAvailable
-        ? `${skyYouthEntries.length} service${skyYouthEntries.length === 1 ? "" : "s"} logged.
-      Avg attendance ${fmtAvg(avg(skyYouthEntries.map(e => e.attendance)))}.`
-        : "Not available this week."}</p>
-
-      <h3 style="margin-bottom:6px;">Production</h3>
-      <p>${productionAvailable ? `${production.length} log${production.length === 1 ? "" : "s"} recorded this week.` : "Not available this week."}</p>
-
-      <h3 style="margin-bottom:6px;">Planning Center</h3>
-      <p>See <a href="${APP_URL}" style="color:#2876ff;">Planning Center Responses in the app</a> for who's still owed a response this week.</p>
-
-      <p style="margin-top:24px;"><a href="${APP_URL}" style="color:#2876ff;">Open Skyline Pulse →</a></p>
-    </div>`;
+  const html = buildDigestHtml({ rangeLabel, entriesAvailable, productionAvailable, sundayEntries, skyYouthEntries, production });
 
   const resendRes = await fetch("https://api.resend.com/emails", {
     method: "POST",
