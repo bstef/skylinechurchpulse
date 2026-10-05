@@ -2087,8 +2087,19 @@ function renderPcoSection(plans, filterState, opts, entriesSource = entries) {
       `<button class="status-pill status-logged pco-view-btn" data-id="${escapeHtml(e.id)}">${escapeHtml(e.service_type)} ✓</button>`
     ).join("");
     const isFuture = p.sort_date.slice(0, 10) > todayStr;
+    // Once a plan's service type is matched (locked in the form — see
+    // openModal/openHostModal's serviceLocked), a second entry would need
+    // the exact same (pco_plan_id, service_type) pair the first one already
+    // took, which the table's unique constraint always rejects — so once
+    // one exists for a matched plan, there's no valid "+ Log another"
+    // action left to offer. Unmatched plans keep it, since there the
+    // service field stays editable and a genuinely different service_type
+    // can still be chosen.
+    const noFurtherLogPossible = !!matched && linked.length > 0;
     const logBtn = isFuture
       ? `<button class="status-pill status-pending" disabled title="Available once the service happens">Upcoming</button>`
+      : noFurtherLogPossible
+      ? ""
       : `<button class="status-pill status-pending pco-log-btn" data-id="${escapeHtml(p.id)}">${linked.length ? "+ Log another" : "Needs details"}</button>`;
     return `<tr>
       <td>${fmtDate(p.sort_date.slice(0,10))}${p.plan_time_name ? `<div class="notes">${escapeHtml(p.plan_time_name)}</div>` : ""}</td>
