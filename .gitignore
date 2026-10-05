@@ -1,5 +1,6 @@
 .dev.vars*
 .DS_Store
+.wrangler/
 .claude/
 .mcp.json
 .agents/
