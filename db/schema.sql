@@ -227,3 +227,42 @@ create policy "Allow anon delete" on public.email_log
 -- metadata. Safe to re-run on a database that already has the table.
 alter table public.email_log
   add column if not exists html_body text;
+
+-- Host/speaker stage-flow ratings — its own table (not more columns on
+-- service_entries) since it's typically filled in by whoever's tracking the
+-- hosting team specifically, not the person logging the main service
+-- numbers, and ties back to the same Planning Center Plan the way
+-- service_entries does (pco_plan_id), so the Hosts tab can show "logged"
+-- status against the same Plan list Sunday Services does.
+create table if not exists public.host_entries (
+  id uuid primary key default gen_random_uuid(),
+  service_date date not null,
+  service_type text not null,
+  pco_plan_id text,
+  host_name text,
+  intro_welcoming smallint not null default 3 check (intro_welcoming between 1 and 5),
+  transitions_flow smallint not null default 3 check (transitions_flow between 1 and 5),
+  announcements_landed boolean not null default true,
+  notes text default '',
+  logged_by text,
+  created_at timestamptz not null default now(),
+  unique (pco_plan_id, service_type)
+);
+
+alter table public.host_entries enable row level security;
+
+drop policy if exists "Allow anon read" on public.host_entries;
+create policy "Allow anon read" on public.host_entries
+  for select using (true);
+
+drop policy if exists "Allow anon insert" on public.host_entries;
+create policy "Allow anon insert" on public.host_entries
+  for insert with check (true);
+
+drop policy if exists "Allow anon update" on public.host_entries;
+create policy "Allow anon update" on public.host_entries
+  for update using (true) with check (true);
+
+drop policy if exists "Allow anon delete" on public.host_entries;
+create policy "Allow anon delete" on public.host_entries
+  for delete using (true);

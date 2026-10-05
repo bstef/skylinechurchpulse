@@ -35,6 +35,7 @@ There's no build step and no framework — `index.html` is the entire applicatio
 | 🗓️ **Calendar** | Month grid or a focused Day view for Sunday morning — attendance rollups, plus edit/delete on any logged service |
 | 🔗 **Planning Center sync** | Plans, sermon artwork, and multi-service times (9:30/11:00) pulled live from your Services Service Types — attendance headcounts pull in too, from Check-Ins, and stay editable/overridable per service |
 | 🎛️ **Production tracking** | Role attendance (lights, camera, director, computer/ProPresenter, audio), a 1–4 graded slides fit-check with a miss count, and a Slides Leaderboard ranking who's sharpest on cues |
+| 🎤 **Hosts** | Rate how the hosting/speaking flowed for any Plan — intro warmth and transition flow (1–5), plus a yes/no on whether the announcements landed |
 | 🎧 **SkyYouth** | Its own Planning Center feed, ledger, and analytics — never mixed in with Sunday morning |
 | 📈 **Analytics** | Rolling trend charts for Services, Production, and SkyYouth, plus a breakdown of who's been logging |
 | 🎨 **Three themes** | Light, Dark, and Ocean — remembered per device |
