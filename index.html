@@ -305,7 +305,6 @@
         <button id="tab-pco" class="active">Sunday Services</button>
         <button id="tab-production">Production</button>
         <button id="tab-skyyouth">SkyYouth</button>
-        <button id="tab-hosts">Hosts</button>
         <button id="tab-serving">Serving</button>
         <!-- Hidden via #tab-log{display:none} in <style> — see comment there. -->
         <button id="tab-log">Services</button>
@@ -385,7 +384,7 @@ const PRODUCTION_ROLES = [
   { key: "audio", label: "Audio" },
 ];
 
-const LOGGING_VIEWS = ["pco", "production", "skyyouth", "hosts", "serving", "calendar", "log"];
+const LOGGING_VIEWS = ["pco", "production", "skyyouth", "serving", "calendar", "log"];
 const ANALYTICS_VIEWS = ["analytics", "production-analytics", "skyyouth-analytics"];
 
 let sb = null;
@@ -393,7 +392,6 @@ let entries = [];
 let productionEntries = [];
 let emailRecipients = [];
 let emailLog = [];
-let hostEntries = [];
 let view = "home";
 let page = "home";
 let lastLoggingView = "pco";
@@ -410,7 +408,6 @@ let pcoDaysPastMax = 120;
 let pcoLoadingMore = false;
 let pcoFilterTypes = new Set();
 let skyYouthFilterTypes = new Set();
-let hostsFilterTypes = new Set();
 let calendarMonth = null;
 let calendarView = "day";
 let calendarDay = null;
@@ -664,36 +661,6 @@ async function loadEmailLog() {
   render();
 }
 
-async function loadHostEntries() {
-  if (!configured()) return;
-  const { data, error } = await sb.from("host_entries").select("*").order("service_date", { ascending: false });
-  if (error) { showError("Couldn't load host entries: " + error.message); return; }
-  hostEntries = data;
-  render();
-}
-
-async function addHostEntry(payload) {
-  const { error } = await sb.from("host_entries").insert([payload]);
-  if (error) { showError(saveErrorMessage(error, payload)); return false; }
-  showError("");
-  await loadHostEntries();
-  return true;
-}
-
-async function updateHostEntry(id, payload) {
-  const { error } = await sb.from("host_entries").update(payload).eq("id", id);
-  if (error) { showError(saveErrorMessage(error, payload)); return false; }
-  showError("");
-  await loadHostEntries();
-  return true;
-}
-
-async function removeHostEntry(id) {
-  const { error } = await sb.from("host_entries").delete().eq("id", id);
-  if (error) { showError("Couldn't delete: " + error.message); return; }
-  await loadHostEntries();
-}
-
 function destroyCharts() { charts.forEach(c => c.destroy()); charts = []; }
 
 function printReport(targetView) {
@@ -718,7 +685,6 @@ function render() {
   document.getElementById("tab-analytics").classList.toggle("active", view === "analytics");
   document.getElementById("tab-pco").classList.toggle("active", view === "pco");
   document.getElementById("tab-skyyouth").classList.toggle("active", view === "skyyouth");
-  document.getElementById("tab-hosts").classList.toggle("active", view === "hosts");
   document.getElementById("tab-serving").classList.toggle("active", view === "serving");
   document.getElementById("tab-production").classList.toggle("active", view === "production");
   document.getElementById("tab-production-analytics").classList.toggle("active", view === "production-analytics");
@@ -800,13 +766,6 @@ function render() {
   if (view === "skyyouth") {
     content.innerHTML = renderSkyYouth();
     wirePcoTabHandlers(content, skyYouthFilterTypes);
-    if (!pcoLoaded) loadPcoPlans();
-    return;
-  }
-
-  if (view === "hosts") {
-    content.innerHTML = renderHosts();
-    wirePcoTabHandlers(content, hostsFilterTypes, hostEntries, (plan) => openHostModal(null, plan), (entry) => openHostDetail(entry));
     if (!pcoLoaded) loadPcoPlans();
     return;
   }
@@ -1055,12 +1014,14 @@ function servicesCSVRows(data) {
   const header = [
     "Date", "Service", "Attendance", "Unity (1-5)", "Engagement (1-5)", "Loudness (dB)",
     "Sound Clarity (Y/N)", "Spiritual Response (0-10)", "Transition Clarity (1-5)",
-    "Lighting Fit (Y/N)", "Talking Fit (Y/N)", "Announcements Fit (Y/N)", "Sermon Fit (Y/N)", "Notes", "Logged By",
+    "Lighting Fit (Y/N)", "Talking Fit (Y/N)", "Announcements Fit (Y/N)", "Sermon Fit (Y/N)",
+    "Host", "Intro Welcoming (1-5)", "Notes", "Logged By",
   ];
   const rows = data.map(e => [
     e.service_date, e.service_type, e.attendance, e.unity, e.engagement, e.loudness_db,
     e.sound_clarity ? "Y" : "N", e.spiritual_response, e.transition_clarity,
-    e.lighting_fit ? "Y" : "N", e.talking_fit ? "Y" : "N", e.announcements_fit ? "Y" : "N", e.sermon_fit ? "Y" : "N", e.notes || "", e.logged_by || "",
+    e.lighting_fit ? "Y" : "N", e.talking_fit ? "Y" : "N", e.announcements_fit ? "Y" : "N", e.sermon_fit ? "Y" : "N",
+    e.host_name || "", e.intro_welcoming, e.notes || "", e.logged_by || "",
   ]);
   return [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\r\n");
 }
@@ -1108,11 +1069,12 @@ function addServicesTable(doc, data) {
     startY: 26,
     styles: { fontSize: 8 },
     headStyles: { fillColor: [40, 118, 255] },
-    head: [["Date", "Service", "Attend.", "Unity", "Engage.", "dB", "Sound", "Spiritual", "Transition", "Lighting", "Talking", "Announce.", "Sermon", "Logged By", "Notes"]],
+    head: [["Date", "Service", "Attend.", "Unity", "Engage.", "dB", "Sound", "Spiritual", "Transition", "Lighting", "Talking", "Announce.", "Sermon", "Host", "Intro", "Logged By", "Notes"]],
     body: data.map(e => [
       fmtDate(e.service_date), e.service_type, e.attendance, `${e.unity}/5`, `${e.engagement}/5`, e.loudness_db,
       e.sound_clarity ? "Y" : "N", `${e.spiritual_response}/10`, `${e.transition_clarity}/5`,
       e.lighting_fit ? "Y" : "N", e.talking_fit ? "Y" : "N", e.announcements_fit ? "Y" : "N", e.sermon_fit ? "Y" : "N",
+      e.host_name || "", `${e.intro_welcoming}/5`,
       e.logged_by || "", e.notes || "",
     ]),
   });
@@ -2018,7 +1980,7 @@ function pcoLoadMoreRow() {
   </div>`;
 }
 
-function renderPcoSection(plans, filterState, opts, entriesSource = entries) {
+function renderPcoSection(plans, filterState, opts) {
   const header = `<div class="pco-header">
     <div>
       <h3 class="display" style="margin:0 0 4px;">${opts.title}</h3>
@@ -2069,7 +2031,7 @@ function renderPcoSection(plans, filterState, opts, entriesSource = entries) {
   }
 
   const entriesByPlan = {};
-  entriesSource.forEach(e => {
+  entries.forEach(e => {
     if (!e.pco_plan_id) return;
     (entriesByPlan[e.pco_plan_id] ||= []).push(e);
   });
@@ -2088,7 +2050,7 @@ function renderPcoSection(plans, filterState, opts, entriesSource = entries) {
     ).join("");
     const isFuture = p.sort_date.slice(0, 10) > todayStr;
     // Once a plan's service type is matched (locked in the form — see
-    // openModal/openHostModal's serviceLocked), a second entry would need
+    // openModal's serviceLocked), a second entry would need
     // the exact same (pco_plan_id, service_type) pair the first one already
     // took, which the table's unique constraint always rejects — so once
     // one exists for a matched plan, there's no valid "+ Log another"
@@ -2143,19 +2105,7 @@ function renderSkyYouth() {
   });
 }
 
-// Same Sunday-service Plans as the main Services tab (not SkyYouth) — hosts
-// introduce/transition the main congregational services, so that's the
-// relevant PCO event list to log against.
-function renderHosts() {
-  return renderPcoSection(pcoPlans.filter(p => !isSkyYouthPlan(p)), hostsFilterTypes, {
-    title: "Hosts — Plans",
-    subtitle: "Pulled live from your Services Service Types. Rate how the hosting flowed for any plan below.",
-    emptyTitle: "No plans found.",
-    emptyBody: `Nothing scheduled in the last ${pcoDaysPast} days or next 45 days across your Service Types.`,
-  }, hostEntries);
-}
-
-function wirePcoTabHandlers(content, filterState, entriesSource = entries, onLog = (plan) => openModal(null, plan), onView = (entry) => openDetail(entry)) {
+function wirePcoTabHandlers(content, filterState) {
   const refreshBtn = document.getElementById("pco-refresh");
   if (refreshBtn) refreshBtn.addEventListener("click", () => loadPcoPlans(true));
   const loadMoreBtn = document.getElementById("pco-load-more");
@@ -2163,12 +2113,12 @@ function wirePcoTabHandlers(content, filterState, entriesSource = entries, onLog
     loadPcoPlans(false, Math.min(pcoDaysPast + LOAD_MORE_STEP_DAYS, pcoDaysPastMax));
   });
   content.querySelectorAll(".pco-log-btn").forEach(btn => {
-    btn.addEventListener("click", () => onLog(pcoPlans.find(p => p.id === btn.dataset.id)));
+    btn.addEventListener("click", () => openModal(null, pcoPlans.find(p => p.id === btn.dataset.id)));
   });
   content.querySelectorAll(".pco-view-btn").forEach(btn => {
     btn.addEventListener("click", () => {
-      const entry = entriesSource.find(e => e.id === btn.dataset.id);
-      if (entry) onView(entry);
+      const entry = entries.find(e => e.id === btn.dataset.id);
+      if (entry) openDetail(entry);
     });
   });
   content.querySelectorAll(".filter-chip").forEach(chip => {
@@ -2325,14 +2275,21 @@ function openDetail(entry) {
           <div class="detail-grid">
             <div class="detail-item"><span class="detail-label">Sound Clarity</span><span class="detail-value">${entry.sound_clarity ? "Yes" : "No"}</span></div>
             <div class="detail-item"><span class="detail-label">Spiritual Response</span><span class="detail-value">${entry.spiritual_response ?? "—"}<span class="unit">/10</span></span></div>
+          </div>
+          <div class="detail-readiness">
+            <span class="detail-label">Production</span>
+            ${readinessRow(entry.lighting_fit, "Lighting fit the song")}
+            ${readinessRow(entry.sermon_fit, "Sermon/message connected")}
+          </div>
+          <div class="detail-grid">
+            ${entry.host_name ? `<div class="detail-item"><span class="detail-label">Host</span><span class="detail-value">${escapeHtml(entry.host_name)}</span></div>` : ""}
+            <div class="detail-item"><span class="detail-label">Intro Welcoming</span><span class="detail-value">${entry.intro_welcoming ?? "—"}<span class="unit">/5</span></span></div>
             <div class="detail-item"><span class="detail-label">Transition Clarity</span><span class="detail-value">${entry.transition_clarity ?? "—"}<span class="unit">/5</span></span></div>
           </div>
           <div class="detail-readiness">
-            <span class="detail-label">Service Flow</span>
-            ${readinessRow(entry.lighting_fit, "Lighting fit the song")}
+            <span class="detail-label">Hosts</span>
             ${readinessRow(entry.talking_fit, "Talking/host segments flowed well")}
             ${readinessRow(entry.announcements_fit, "Announcements landed well")}
-            ${readinessRow(entry.sermon_fit, "Sermon/message connected")}
           </div>
           ${entry.notes ? `<div class="detail-notes-block"><span class="detail-label">Notes</span><p>${escapeHtml(entry.notes)}</p></div>` : ""}
           <div class="detail-actions">
@@ -2372,10 +2329,13 @@ function openModal(entry, pcoPlan) {
     talkingFit: entry ? entry.talking_fit : true,
     announcementsFit: entry ? entry.announcements_fit : true,
     sermonFit: entry ? entry.sermon_fit : true,
+    hostName: entry ? (entry.host_name || "") : "",
+    introWelcoming: entry ? entry.intro_welcoming : 3,
     notes: entry ? (entry.notes || "") : "",
     loggedBy: entry ? (entry.logged_by || "") : (localStorage.getItem("skyline-logged-by") || ""),
   };
   const loggedByNames = [...new Set(entries.map(e => e.logged_by).filter(Boolean))].sort();
+  const hostNames = [...new Set(entries.map(e => e.host_name).filter(Boolean))].sort();
   document.getElementById("modal-slot").innerHTML = `
     <div class="modal-backdrop" id="modal-backdrop">
       <div class="modal">
@@ -2413,16 +2373,23 @@ function openModal(entry, pcoPlan) {
           <div class="field-section-label">Room Experience</div>
           <label class="field"><span>Sound blends well in the back (can't tell where it's coming from)</span>${yesNoSelect("f-sound", v.soundClarity)}</label>
           <label class="field"><span id="spiritual-label">Spiritual response, standing 2/3 back — ${v.spiritualResponse}/10</span><input type="range" min="0" max="10" value="${v.spiritualResponse}" id="f-spiritual"></label>
-          <label class="field"><span id="transition-label">Transitions gave clear inspiration to respond — ${v.transitionClarity}/5</span><input type="range" min="1" max="5" value="${v.transitionClarity}" id="f-transition"></label>
 
-          <div class="field-section-label">Service Flow</div>
+          <div class="field-section-label">Production</div>
           <div class="row2">
             <label class="field" style="flex:1"><span>Lighting fit the song</span>${yesNoSelect("f-lighting", v.lightingFit)}</label>
-            <label class="field" style="flex:1"><span>Talking/host segments flowed well</span>${yesNoSelect("f-talking", v.talkingFit)}</label>
-          </div>
-          <div class="row2">
-            <label class="field" style="flex:1"><span>Announcements landed well</span>${yesNoSelect("f-announcements", v.announcementsFit)}</label>
             <label class="field" style="flex:1"><span>Sermon/message connected</span>${yesNoSelect("f-sermon", v.sermonFit)}</label>
+          </div>
+
+          <div class="field-section-label">Hosts</div>
+          <label class="field"><span>Host / Speaker name</span>
+            <input type="text" id="f-host-name" list="host-name-list" placeholder="Who hosted?" value="${escapeHtml(v.hostName)}" autocomplete="off">
+            <datalist id="host-name-list">${hostNames.map(n=>`<option value="${escapeHtml(n)}">`).join("")}</datalist>
+          </label>
+          <label class="field"><span id="intro-label">Intro felt welcoming and inviting — ${v.introWelcoming}/5</span><input type="range" min="1" max="5" value="${v.introWelcoming}" id="f-intro"></label>
+          <label class="field"><span id="transition-label">Transitions gave clear inspiration to respond — ${v.transitionClarity}/5</span><input type="range" min="1" max="5" value="${v.transitionClarity}" id="f-transition"></label>
+          <div class="row2">
+            <label class="field" style="flex:1"><span>Talking/host segments flowed well</span>${yesNoSelect("f-talking", v.talkingFit)}</label>
+            <label class="field" style="flex:1"><span>Announcements landed well</span>${yesNoSelect("f-announcements", v.announcementsFit)}</label>
           </div>
 
           <label class="field"><span>Notes (optional)</span><textarea rows="2" id="f-notes" placeholder="Anything worth remembering about this service…">${escapeHtml(v.notes)}</textarea></label>
@@ -2461,6 +2428,9 @@ function openModal(entry, pcoPlan) {
   document.getElementById("f-transition").addEventListener("input", (e) => {
     document.getElementById("transition-label").textContent = `Transitions gave clear inspiration to respond — ${e.target.value}/5`;
   });
+  document.getElementById("f-intro").addEventListener("input", (e) => {
+    document.getElementById("intro-label").textContent = `Intro felt welcoming and inviting — ${e.target.value}/5`;
+  });
   document.getElementById("f-save").addEventListener("click", async () => {
     const attendance = document.getElementById("f-attendance").value;
     const loudness = document.getElementById("f-loudness").value;
@@ -2486,6 +2456,8 @@ function openModal(entry, pcoPlan) {
       talking_fit: document.getElementById("f-talking").value === "yes",
       announcements_fit: document.getElementById("f-announcements").value === "yes",
       sermon_fit: document.getElementById("f-sermon").value === "yes",
+      host_name: document.getElementById("f-host-name").value.trim() || null,
+      intro_welcoming: Number(document.getElementById("f-intro").value),
       notes: document.getElementById("f-notes").value.trim(),
       pco_plan_id: entry ? (entry.pco_plan_id ?? null) : (pcoPlan ? pcoPlan.plan_id : null),
       logged_by: loggedBy,
@@ -2498,138 +2470,6 @@ function openModal(entry, pcoPlan) {
   });
 }
 function closeModal() { document.getElementById("modal-slot").innerHTML = ""; }
-
-function openHostDetail(entry) {
-  if (!entry) return;
-  document.getElementById("modal-slot").innerHTML = `
-    <div class="modal-backdrop" id="modal-backdrop">
-      <div class="modal">
-        <div class="modal-head">
-          <div><h2 class="display"><span class="service-badge ${badgeClass(entry.service_type)}">${escapeHtml(entry.service_type)}</span></h2></div>
-          <button class="close-x" id="modal-close">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="detail-date">${fmtDate(entry.service_date)}</div>
-          ${entry.host_name ? `<div class="detail-logged-by">Host: ${escapeHtml(entry.host_name)}</div>` : ""}
-          ${entry.logged_by ? `<div class="detail-logged-by">Logged by ${escapeHtml(entry.logged_by)}</div>` : ""}
-          <div class="detail-grid">
-            <div class="detail-item"><span class="detail-label">Intro Welcoming</span><span class="detail-value">${entry.intro_welcoming}<span class="unit">/5</span></span></div>
-            <div class="detail-item"><span class="detail-label">Transitions Flow</span><span class="detail-value">${entry.transitions_flow}<span class="unit">/5</span></span></div>
-          </div>
-          <div class="detail-readiness">
-            ${readinessRow(entry.announcements_landed, "Announcements landed well")}
-          </div>
-          ${entry.notes ? `<div class="detail-notes-block"><span class="detail-label">Notes</span><p>${escapeHtml(entry.notes)}</p></div>` : ""}
-          <div class="detail-actions">
-            <button class="save-btn" id="detail-edit">Edit Entry</button>
-            <button class="btn-danger" id="detail-delete">Delete</button>
-          </div>
-        </div>
-      </div>
-    </div>`;
-
-  document.getElementById("modal-close").addEventListener("click", closeModal);
-  document.getElementById("modal-backdrop").addEventListener("click", (e) => { if (e.target.id === "modal-backdrop") closeModal(); });
-  document.getElementById("detail-edit").addEventListener("click", () => openHostModal(entry));
-  document.getElementById("detail-delete").addEventListener("click", async () => {
-    await removeHostEntry(entry.id);
-    closeModal();
-  });
-}
-
-function openHostModal(entry, pcoPlan) {
-  const editing = !!entry;
-  const today = new Date().toISOString().slice(0,10);
-  const pcoMatchedService = (!editing && pcoPlan) ? guessServiceType(pcoPlan.plan_time_name || pcoPlan.service_type_name) : "";
-  const serviceLocked = !!pcoMatchedService;
-  const v = {
-    date: entry ? entry.service_date : (pcoPlan ? pcoPlan.sort_date.slice(0,10) : today),
-    service: entry ? entry.service_type : pcoMatchedService,
-    hostName: entry ? (entry.host_name || "") : "",
-    introWelcoming: entry ? entry.intro_welcoming : 3,
-    transitionsFlow: entry ? entry.transitions_flow : 3,
-    announcementsLanded: entry ? entry.announcements_landed : true,
-    notes: entry ? (entry.notes || "") : "",
-    loggedBy: entry ? (entry.logged_by || "") : (localStorage.getItem("skyline-logged-by") || ""),
-  };
-  const hostNames = [...new Set(hostEntries.map(e => e.host_name).filter(Boolean))].sort();
-  const loggedByNames = [...new Set(hostEntries.map(e => e.logged_by).filter(Boolean))].sort();
-  document.getElementById("modal-slot").innerHTML = `
-    <div class="modal-backdrop" id="modal-backdrop">
-      <div class="modal">
-        <div class="modal-head"><h2 class="display">${editing ? "Edit Host Log" : "Log Hosting"}</h2><button class="close-x" id="modal-close">✕</button></div>
-        <div class="modal-body">
-          ${pcoPlan ? `<div class="pco-linked-note" style="display:flex;align-items:center;gap:12px;">
-            ${pcoPlan.artwork_url ? `<img class="pco-artwork-lg" src="${escapeHtml(pcoPlan.artwork_url)}" alt="">` : ""}
-            <span>From Planning Center: <strong>${escapeHtml(pcoPlan.title)}${pcoPlan.plan_time_name ? " · " + escapeHtml(pcoPlan.plan_time_name) : ""}</strong></span>
-          </div>` : ""}
-          <div class="row2">
-            <label class="field" style="flex:1"><span>Date</span><input type="date" id="hf-date" value="${v.date}" max="${today}"></label>
-            ${serviceLocked ? `
-            <div class="field" style="flex:1">
-              <span>Service</span>
-              <div class="service-locked"><span class="service-badge ${badgeClass(v.service)}">${escapeHtml(v.service)}</span></div>
-              <input type="hidden" id="hf-service" value="${escapeHtml(v.service)}">
-            </div>
-            ` : `
-            <label class="field" style="flex:1"><span>Service *</span>
-              <select id="hf-service" required>
-                <option value="" ${v.service?"":"selected"} disabled>Select a service…</option>
-                ${SERVICE_TYPES.map(s=>`<option value="${s}" ${s===v.service?"selected":""}>${s}</option>`).join("")}
-              </select>
-            </label>
-            `}
-          </div>
-          <label class="field"><span>Host / Speaker name</span>
-            <input type="text" id="hf-host-name" list="host-name-list" placeholder="Who hosted?" value="${escapeHtml(v.hostName)}" autocomplete="off">
-            <datalist id="host-name-list">${hostNames.map(n=>`<option value="${escapeHtml(n)}">`).join("")}</datalist>
-          </label>
-          <label class="field"><span id="hf-intro-label">Intro felt welcoming and inviting — ${v.introWelcoming}/5</span><input type="range" min="1" max="5" value="${v.introWelcoming}" id="hf-intro"></label>
-          <label class="field"><span id="hf-transitions-label">Transitions flowed well — ${v.transitionsFlow}/5</span><input type="range" min="1" max="5" value="${v.transitionsFlow}" id="hf-transitions"></label>
-          <label class="field"><span>Announcements landed well</span>${yesNoSelect("hf-announcements", v.announcementsLanded)}</label>
-          <label class="field"><span>Notes (optional)</span><textarea rows="2" id="hf-notes" placeholder="Anything worth remembering about the hosting…">${escapeHtml(v.notes)}</textarea></label>
-          <label class="field"><span>Logged by *</span>
-            <input type="text" id="hf-logged-by" list="host-logged-by-list" placeholder="Your name" value="${escapeHtml(v.loggedBy)}" autocomplete="off">
-            <datalist id="host-logged-by-list">${loggedByNames.map(n=>`<option value="${escapeHtml(n)}">`).join("")}</datalist>
-          </label>
-          <button class="save-btn" id="hf-save">${editing ? "Update Entry" : "Save Entry"}</button>
-        </div>
-      </div>
-    </div>`;
-
-  document.getElementById("modal-close").addEventListener("click", closeModal);
-  document.getElementById("modal-backdrop").addEventListener("click", (e) => { if (e.target.id === "modal-backdrop") closeModal(); });
-  document.getElementById("hf-intro").addEventListener("input", (e) => {
-    document.getElementById("hf-intro-label").textContent = `Intro felt welcoming and inviting — ${e.target.value}/5`;
-  });
-  document.getElementById("hf-transitions").addEventListener("input", (e) => {
-    document.getElementById("hf-transitions-label").textContent = `Transitions flowed well — ${e.target.value}/5`;
-  });
-  document.getElementById("hf-save").addEventListener("click", async () => {
-    const serviceType = document.getElementById("hf-service").value;
-    const serviceDate = document.getElementById("hf-date").value;
-    const loggedBy = document.getElementById("hf-logged-by").value.trim();
-    if (!serviceType) { showError("Please select a service."); return; }
-    if (!loggedBy) { showError("Please enter your name so we know who logged this."); return; }
-    if (serviceDate > today) { showError("Can't log details for a service that hasn't happened yet."); return; }
-    const payload = {
-      service_date: serviceDate,
-      service_type: serviceType,
-      host_name: document.getElementById("hf-host-name").value.trim(),
-      intro_welcoming: Number(document.getElementById("hf-intro").value),
-      transitions_flow: Number(document.getElementById("hf-transitions").value),
-      announcements_landed: document.getElementById("hf-announcements").value === "yes",
-      notes: document.getElementById("hf-notes").value.trim(),
-      pco_plan_id: entry ? (entry.pco_plan_id ?? null) : (pcoPlan ? pcoPlan.plan_id : null),
-      logged_by: loggedBy,
-    };
-    const ok = editing ? await updateHostEntry(entry.id, payload) : await addHostEntry(payload);
-    if (ok) {
-      localStorage.setItem("skyline-logged-by", loggedBy);
-      closeModal();
-    }
-  });
-}
 
 function openProductionModal(entry) {
   const editing = !!entry;
@@ -2731,7 +2571,6 @@ document.getElementById("tab-calendar").addEventListener("click", () => setView(
 document.getElementById("tab-analytics").addEventListener("click", () => setView("analytics"));
 document.getElementById("tab-pco").addEventListener("click", () => setView("pco"));
 document.getElementById("tab-skyyouth").addEventListener("click", () => setView("skyyouth"));
-document.getElementById("tab-hosts").addEventListener("click", () => setView("hosts"));
 document.getElementById("tab-serving").addEventListener("click", () => setView("serving"));
 document.getElementById("tab-production").addEventListener("click", () => setView("production"));
 document.getElementById("tab-production-analytics").addEventListener("click", () => setView("production-analytics"));
@@ -2766,7 +2605,6 @@ if (configured()) {
   loadProductionEntries();
   loadEmailRecipients();
   loadEmailLog();
-  loadHostEntries();
 } else {
   render();
 }

@@ -266,3 +266,16 @@ create policy "Allow anon update" on public.host_entries
 drop policy if exists "Allow anon delete" on public.host_entries;
 create policy "Allow anon delete" on public.host_entries
   for delete using (true);
+
+-- host_entries turned out to duplicate most of what service_entries already
+-- captured (talking_fit/announcements_fit are the same signal as
+-- transitions_flow/announcements_landed) — the only genuinely new signal was
+-- host_name and intro_welcoming, so those moved onto service_entries itself
+-- and the Hosts tab/table were retired. No host_entries rows existed at the
+-- time of this migration, so there was nothing to carry over. Safe to re-run.
+alter table public.service_entries
+  add column if not exists host_name text;
+alter table public.service_entries
+  add column if not exists intro_welcoming smallint not null default 3 check (intro_welcoming between 1 and 5);
+
+drop table if exists public.host_entries;
