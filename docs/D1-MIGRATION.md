@@ -39,10 +39,10 @@ Cloudflare account: Peacockengr (`87d75a85659dd39b348acf458b75b606`).
 
 ## Remaining before cutover
 
-1. Staging deployment `a6248f08-9d76-4426-8d96-80c876f4ae88` succeeded for commit `e1000728a950736457a4799375e8597e0d59dfbc`. The base preview hostname shows the expected Cloudflare Access login. Live visual checks are waiting for the user's Google Workspace sign-in in the browser panel; no authenticated preview result has been claimed.
+1. Staging deployment `a6248f08-9d76-4426-8d96-80c876f4ae88` succeeded for commit `e1000728a950736457a4799375e8597e0d59dfbc`. The base preview hostname shows the expected Cloudflare Access login. The user will sign into staging separately; no authenticated visual result has been claimed. Backend work uses the connected integrations without browser login.
 2. Complete rendered browser checks: calendar, manual/PCO logging, edit/delete/undo, production, analytics, CSV/PDF, recipients, and email history. Set staging PCO secrets securely for live integration checks; email remains disabled.
-3. Create a separate production D1 database and apply both migrations. A final source snapshot is required; staging data is not automatically the final production data.
-4. Prepare exact cutover configuration changes: Pages name `skylinechurchpulse`, production DB binding, existing live Access audience, build command/output directory, production env vars, digest name/binding/schedules/secrets. Preview must remain on staging, with emails disabled. Review production secret names only; preserve existing values.
+3. Production D1 `skyline-pulse-production` (`ebaf7a80-ec0c-430c-a782-bae2cd427cb2`) has both migrations applied and all five tables verified EMPTY. A final source snapshot is required; staging data is not the final production data.
+4. Review prepared production candidates (see below), then apply the approved cutover configuration changes: Pages name `skylinechurchpulse`, production DB binding, existing live Access audience, build command/output directory, production env vars, digest name/binding/schedules/secrets. Preview must remain on staging, with emails disabled. Review production secret names only; preserve existing values.
 5. Review production cutover with the user after the preview and checks are concrete. Do not merge draft #32 prematurely.
 
 ## Cutover sequence
@@ -70,4 +70,15 @@ npm run test:runtime
 npx wrangler deploy --dry-run --config cron-worker/wrangler.jsonc
 ```
 
-No production database, deployment, email schedule, recipients, access memberships, or billing plan has been changed by this migration work.
+An empty production D1 database has been prepared. No live database contents, app deployment, email schedule, recipients, access memberships, or billing plan have been changed by this migration work.
+
+## Prepared production candidates — NOT deployed
+
+- `wrangler.production-candidate.jsonc`: live Pages name and existing live Access audience; production D1 binding; explicit preview override retains staging D1/audience; all email disabled. This filename is not auto-selected by Pages Git builds. At approved cutover, replace root `wrangler.jsonc` with its contents so relative paths remain correct. Never merge the current staging root config into main unchanged.
+- `cron-worker/wrangler.production-candidate.jsonc`: existing live digest name, separate production D1, both observed Monday triggers (`0 12 * * 1`, `0 13 * * 1`), email disabled. Retain EMAIL_ENABLED=false through deployment/smoke checks; only enable after review. Existing Worker secrets are DIGEST_TEST_SECRET and RESEND_API_KEY; preserve values. Supabase secrets can remain during rollback review.
+- `ops/pages-build-candidate.json`: narrowly scoped Pages project PATCH to set `npm run build` / `dist`. Contains no environment-variable edits, so it does not replace PCO_APP_ID, PCO_SECRET, RESEND_API_KEY, DIGEST_CRON_SECRET or existing Supabase secret values. Do not apply before the coordinated cutover: main currently has no build script.
+- Both Pages production/preview candidate configurations passed Wrangler schema/type generation; the production digest candidate passed a deployment dry run. No candidate was deployed. The static build still excludes all configuration/source/backup files.
+- Git auto-deploy is currently enabled on the live project. Before merging production configuration, disable live production auto-deploy, record the old settings/deployment/Worker version, and establish the write freeze. Apply build settings and deploy the reviewed commit explicitly only after final import/parity. Re-enable auto-deploy after successful smoke checks.
+- Live preview aliases need explicit Access coverage for visual review. An alias with no valid matching Access assertion fails closed at the API. Do not add bypass policies to make previews work.
+
+Backend audit on 2026-10-18: Supabase is ACTIVE_HEALTHY; live Pages canonical deployment remains f5d7b59a-386e-4f97-ab07-0d3d3296d198. Only secret names were inspected. Production D1 contains zero application rows and is not bound to any live service.
