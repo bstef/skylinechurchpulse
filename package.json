@@ -1,0 +1,32 @@
+{
+  "name": "skylinechurchpulse",
+  "version": "1.0.0",
+  "description": "Skyline Pulse D1 migration development and tests",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bstef/skylinechurchpulse.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/bstef/skylinechurchpulse/issues"
+  },
+  "homepage": "https://github.com/bstef/skylinechurchpulse#readme",
+  "dependencies": {
+    "jose": "^6.2.12"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261018.1",
+    "wrangler": "^4.151.1"
+  },
+  "private": true
+}

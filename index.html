@@ -7,7 +7,7 @@
 <link rel="icon" type="image/jpeg" href="assets/skylinelogosq.jpeg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/assets/data-client.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
@@ -349,15 +349,7 @@
 <div id="toast-slot"></div>
 
 <script>
-/* ====================== CONFIGURE THIS ======================
-   Paste your Supabase project URL and anon (public) key below.
-   Both are safe to expose in frontend code — access is controlled
-   by the Row Level Security policies in db/schema.sql.
-   ============================================================== */
-const SUPABASE_URL = "https://uvwgotklgfhvqbcpdqqb.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV2d2dvdGtsZ2ZodnFiY3BkcXFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0Nzc5NDQsImV4cCI6MjA5OTA1Mzk0NH0.gMBS_RU3yHkk2O7BjiUWwPOofLpiOtS0oOVylU9e2Dc";
-/* ============================================================== */
-
+// Data is accessed through the authenticated same-origin D1 API.
 const SERVICE_TYPES = ["9:30 AM", "11:00 AM", "Worship Night", "SkyYouth", "Special Event"];
 const LOGO_LIGHT = "assets/SkylinePulseLight-removebg-preview.png";
 const LOGO_DARK = "assets/SkylinePulseDark-removebg-preview.png";
@@ -387,7 +379,7 @@ const PRODUCTION_ROLES = [
 const LOGGING_VIEWS = ["pco", "production", "skyyouth", "serving", "calendar", "log"];
 const ANALYTICS_VIEWS = ["analytics", "production-analytics", "skyyouth-analytics"];
 
-let sb = null;
+
 let entries = [];
 let productionEntries = [];
 let emailRecipients = [];
@@ -520,7 +512,7 @@ function toggleTheme() {
 }
 
 function configured() {
-  return SUPABASE_URL !== "YOUR_SUPABASE_PROJECT_URL" && SUPABASE_ANON_KEY !== "YOUR_SUPABASE_ANON_KEY";
+  return typeof window.pulseData === "function";
 }
 
 function fmtDate(d) {
@@ -539,7 +531,7 @@ function showError(msg) {
 
 async function loadEntries() {
   if (!configured()) return;
-  const { data, error } = await sb.from("service_entries").select("*").order("service_date", { ascending: false });
+  const { data, error } = await pulseData("service_entries");
   if (error) { showError("Couldn't load entries: " + error.message); return; }
   entries = data;
   render();
@@ -553,7 +545,7 @@ function saveErrorMessage(error, payload) {
 }
 
 async function addEntry(payload) {
-  const { error } = await sb.from("service_entries").insert([payload]);
+  const { error } = await pulseData("service_entries", "POST", payload);
   if (error) { showError(saveErrorMessage(error, payload)); return false; }
   showError("");
   await loadEntries();
@@ -564,7 +556,7 @@ let undoTimeoutId = null;
 
 async function removeEntry(id) {
   const entry = entries.find(e => e.id === id);
-  const { error } = await sb.from("service_entries").delete().eq("id", id);
+  const { error } = await pulseData("service_entries", "DELETE", null, id);
   if (error) { showError("Couldn't delete: " + error.message); return; }
   await loadEntries();
   if (entry) showUndoToast(entry);
@@ -587,7 +579,7 @@ function showUndoToast(deletedEntry) {
 }
 
 async function updateEntry(id, payload) {
-  const { error } = await sb.from("service_entries").update(payload).eq("id", id);
+  const { error } = await pulseData("service_entries", "PATCH", payload, id);
   if (error) { showError(saveErrorMessage(error, payload)); return false; }
   showError("");
   await loadEntries();
@@ -596,14 +588,14 @@ async function updateEntry(id, payload) {
 
 async function loadProductionEntries() {
   if (!configured()) return;
-  const { data, error } = await sb.from("production_entries").select("*").order("service_date", { ascending: false });
+  const { data, error } = await pulseData("production_entries");
   if (error) { showError("Couldn't load production entries: " + error.message); return; }
   productionEntries = data;
   render();
 }
 
 async function addProductionEntry(payload) {
-  const { error } = await sb.from("production_entries").insert([payload]);
+  const { error } = await pulseData("production_entries", "POST", payload);
   if (error) { showError("Couldn't save: " + error.message); return false; }
   showError("");
   await loadProductionEntries();
@@ -611,7 +603,7 @@ async function addProductionEntry(payload) {
 }
 
 async function updateProductionEntry(id, payload) {
-  const { error } = await sb.from("production_entries").update(payload).eq("id", id);
+  const { error } = await pulseData("production_entries", "PATCH", payload, id);
   if (error) { showError("Couldn't save: " + error.message); return false; }
   showError("");
   await loadProductionEntries();
@@ -619,21 +611,21 @@ async function updateProductionEntry(id, payload) {
 }
 
 async function removeProductionEntry(id) {
-  const { error } = await sb.from("production_entries").delete().eq("id", id);
+  const { error } = await pulseData("production_entries", "DELETE", null, id);
   if (error) { showError("Couldn't delete: " + error.message); return; }
   await loadProductionEntries();
 }
 
 async function loadEmailRecipients() {
   if (!configured()) return;
-  const { data, error } = await sb.from("email_recipients").select("*").order("created_at", { ascending: true });
+  const { data, error } = await pulseData("email_recipients");
   if (error) { showError("Couldn't load email recipients: " + error.message); return; }
   emailRecipients = data;
   render();
 }
 
 async function addEmailRecipient(email) {
-  const { error } = await sb.from("email_recipients").insert([{ email }]);
+  const { error } = await pulseData("email_recipients", "POST", { email });
   if (error) {
     showError(error.code === "23505" ? `${email} is already on the list.` : "Couldn't save: " + error.message);
     return false;
@@ -644,7 +636,7 @@ async function addEmailRecipient(email) {
 }
 
 async function removeEmailRecipient(id) {
-  const { error } = await sb.from("email_recipients").delete().eq("id", id);
+  const { error } = await pulseData("email_recipients", "DELETE", null, id);
   if (error) { showError("Couldn't remove: " + error.message); return; }
   await loadEmailRecipients();
 }
@@ -655,7 +647,7 @@ async function removeEmailRecipient(id) {
 // large, but there's no reason to pull more than fits on one screen.
 async function loadEmailLog() {
   if (!configured()) return;
-  const { data, error } = await sb.from("email_log").select("*").order("sent_at", { ascending: false }).limit(20);
+  const { data, error } = await pulseData("email_log");
   if (error) { showError("Couldn't load email log: " + error.message); return; }
   emailLog = data;
   render();
@@ -700,7 +692,7 @@ function render() {
 
   if (!configured()) {
     document.getElementById("config-slot").innerHTML = `<div id="config-warning">
-      <strong>Not connected yet.</strong> Open <code>index.html</code> and set <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> at the top of the script to your Supabase project's values, then redeploy.
+      <strong>Not connected yet.</strong> Refresh the page to reconnect to Skyline Pulse.
     </div>`;
     content.innerHTML = "";
     return;
@@ -2599,7 +2591,6 @@ navHelp.addEventListener("click", () => {
 applyTheme(getStoredTheme());
 
 if (configured()) {
-  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   loadEntries();
   loadPcoPlans();
   loadProductionEntries();

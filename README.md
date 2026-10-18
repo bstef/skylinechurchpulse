@@ -1,3 +1,5 @@
+> **D1 migration draft:** This branch is not ready for production. See [the resumable checkpoint and remaining work](docs/D1-MIGRATION.md). Email jobs still use Supabase. Do not merge to `main` yet.
+
 <div align="center">
 
 <img src="docs/images/logo-light.png" alt="Skyline Pulse" height="72">
