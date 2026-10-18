@@ -1,7 +1,7 @@
 import { tableDefinition, listRows } from '../../../lib/d1-store.js';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const integerFields = new Set(['attendance','attendance_pco_value','unity','engagement','loudness_db','spiritual_response','transition_clarity','intro_welcoming','slides_grade','slides_miss_count']);
-const nullable = new Set(['attendance_pco_value','pco_plan_id','logged_by','host_name','lights_name','camera_name','director_name','computer_name','audio_name']);
+const nullable = new Set(['notes','attendance_pco_value','pco_plan_id','logged_by','host_name','lights_name','camera_name','director_name','computer_name','audio_name']);
 const ranges = { attendance:[0,1000000], attendance_pco_value:[0,1000000], unity:[1,5], engagement:[1,5], loudness_db:[0,200], spiritual_response:[0,10], transition_clarity:[1,5], intro_welcoming:[1,5], slides_grade:[1,4], slides_miss_count:[0,1000000] };
 function fail(message, status = 400, code) {
   return Response.json({ error: { message, ...(code ? { code } : {}) } }, { status });

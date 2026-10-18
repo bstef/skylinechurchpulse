@@ -270,7 +270,7 @@
   .cal-day-card-logged-by{font-size:12px;color:var(--muted);margin-top:6px;}
 
   @media print{
-    header, footer, #modal-slot, #toast-slot, #error-slot, #config-slot, button{display:none !important;}
+    header, footer, #modal-slot, #toast-slot, #error-slot, #config-slot, #environment-slot, button{display:none !important;}
     body{background:#fff;color:#000;}
     main{padding:0;max-width:100%;}
     .card{break-inside:avoid;border:1px solid #ccc;box-shadow:none;}
@@ -329,6 +329,7 @@
 <main>
   <div id="error-slot"></div>
   <div id="config-slot"></div>
+  <div id="environment-slot"></div>
   <div id="content"></div>
 </main>
 
@@ -527,6 +528,23 @@ function pctTrueIn(arr, field) { return arr.length ? Math.round(100 * arr.filter
 function pctTrue(field) { return pctTrueIn(entries, field); }
 function showError(msg) {
   document.getElementById("error-slot").innerHTML = msg ? `<div class="error-banner">${msg}</div>` : "";
+}
+
+let runtimeEmailEnabled = false;
+async function loadEnvironment() {
+  try {
+    const response = await fetch("/api/status", { credentials: "same-origin" });
+    if (!response.ok) return;
+    const status = await response.json();
+    runtimeEmailEnabled = status.emailEnabled === true;
+    if (status.preview) {
+      const banner = document.createElement("div");
+      banner.className = "error-banner";
+      banner.textContent = "Migration preview — changes here do not affect the live app. Email sending is disabled.";
+      document.getElementById("environment-slot").replaceChildren(banner);
+    }
+    render();
+  } catch { /* Data requests surface connectivity errors separately. */ }
 }
 
 async function loadEntries() {
@@ -1147,6 +1165,7 @@ function pdfBase64(doc) {
 }
 
 async function emailReport(dataset, btn) {
+  if (!runtimeEmailEnabled) { showError("Email sending is disabled in this environment."); return; }
   if (emailRecipients.length === 0) {
     showError("Add at least one recipient below before emailing a report.");
     return;
@@ -2591,6 +2610,7 @@ navHelp.addEventListener("click", () => {
 applyTheme(getStoredTheme());
 
 if (configured()) {
+  loadEnvironment();
   loadEntries();
   loadPcoPlans();
   loadProductionEntries();

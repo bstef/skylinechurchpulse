@@ -1,26 +1,8 @@
-// Standalone Cloudflare Worker — the weekly digest's actual scheduler.
-//
-// This does NOT live in functions/api/ (the Pages project) because the
-// church's Cloudflare Access policy protects the whole skylinechurch.tech
-// domain (and its .pages.dev alias), so any external HTTP call — including
-// a GitHub Actions cron hitting a Pages Function's URL — gets redirected to
-// an Access login page it can never complete. A Worker's own Cron Trigger
-// fires internally within Cloudflare's infrastructure: it's not an inbound
-// HTTP request to the protected zone at all, so Access never sees it and
-// nothing about the existing Access policy needs to change.
-//
-// Deployed separately from the Pages project via `wrangler deploy` in this
-// directory (see README's Email integration section). Needs its own copy
-// of RESEND_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY, and DIGEST_TEST_SECRET
-// set as Worker secrets — this Worker doesn't share the Pages project's
-// secret store.
-//
-// Trade-off vs. the earlier Pages Function version: this reads Services/
-// Production/SkyYouth straight from Supabase (same as before) but does NOT
-// include the Planning Center "needs response" section, since that would
-// mean either re-implementing the Planning Center API calls a third time or
-// calling back through the Access-protected /api/pco-stats — the digest
-// links into the app for that instead.
+// Weekly digest reads the same D1 database as Pages through a native binding.
+// Production remains on the previous deployment until the coordinated cutover.
+// EMAIL_ENABLED must explicitly be "true"; preview/local runs never send by default.
+import { recipients as fetchRecipients, allRows, logEmail as logEmailSend, pruneEmailLogs } from "../../lib/d1-store.js";
+import { timingSafeEqual } from "node:crypto";
 
 const FROM_ADDRESS = "Skyline Pulse <pulse@skylinechurch.tech>";
 const DIGEST_WINDOW_DAYS = 7;
@@ -54,72 +36,13 @@ const COLOR = {
   muted: "#8A8375",
 };
 
-async function fetchRecipients(supabaseUrl, supabaseAnonKey) {
-  const res = await fetch(`${supabaseUrl}/rest/v1/email_recipients?select=email`, {
-    headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` },
-  });
-  if (!res.ok) throw new Error(`Couldn't load recipients (${res.status})`);
-  const rows = await res.json();
-  return rows.map(r => r.email);
-}
-
-async function fetchRecentEntries(supabaseUrl, supabaseAnonKey, table, sinceIso) {
-  const url = `${supabaseUrl}/rest/v1/${table}?select=*&service_date=gte.${sinceIso}&order=service_date.desc`;
-  const res = await fetch(url, {
-    headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` },
-  });
-  if (!res.ok) throw new Error(`Couldn't load ${table} (${res.status})`);
-  return res.json();
+async function fetchRecentEntries(db, table, since) {
+  return allRows(db, table, { since });
 }
 
 function avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null; }
 function fmtAvg(n) { return n == null ? "—" : n.toFixed(1); }
 function fmtAvgInt(n) { return n == null ? "—" : Math.round(n).toString(); }
-
-// Records that a send happened (or failed) so it's visible on the Exports
-// page — best-effort: a logging failure shouldn't fail the actual send.
-async function logEmailSend(supabaseUrl, supabaseAnonKey, { kind, dataset, subject, recipients, status, error, htmlBody }) {
-  try {
-    await fetch(`${supabaseUrl}/rest/v1/email_log`, {
-      method: "POST",
-      headers: {
-        apikey: supabaseAnonKey,
-        Authorization: `Bearer ${supabaseAnonKey}`,
-        "Content-Type": "application/json",
-        Prefer: "return=minimal",
-      },
-      body: JSON.stringify({
-        kind,
-        dataset: dataset || null,
-        subject,
-        recipients: recipients.join(", "),
-        recipient_count: recipients.length,
-        status,
-        error: error || null,
-        html_body: htmlBody || null,
-      }),
-    });
-  } catch (err) {
-    // swallow — logging is a nice-to-have, not worth failing the send over
-  }
-}
-
-// Keeps email_log from growing indefinitely (a safety margin well short of
-// any Supabase free-tier concern, since these rows are tiny) — runs after
-// every send, scheduled or manual test alike, so it doesn't depend on a
-// separate schedule of its own.
-const LOG_RETENTION_DAYS = 90;
-async function pruneOldEmailLogs(supabaseUrl, supabaseAnonKey) {
-  try {
-    const cutoff = new Date(Date.now() - LOG_RETENTION_DAYS * 86400000).toISOString();
-    await fetch(`${supabaseUrl}/rest/v1/email_log?sent_at=lt.${encodeURIComponent(cutoff)}`, {
-      method: "DELETE",
-      headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}`, Prefer: "return=minimal" },
-    });
-  } catch (err) {
-    // best-effort cleanup — a failure here just means next run tries again
-  }
-}
 
 // One stat block per dataset — icon + label, then the line of numbers,
 // separated by a thin rule except after the last one.
@@ -201,18 +124,19 @@ function buildDigestHtml({ rangeLabel, entriesAvailable, productionAvailable, su
 </html>`;
 }
 
-async function sendDigest(env) {
-  const { RESEND_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY } = env;
-  if (!RESEND_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    return { ok: false, error: "Missing RESEND_API_KEY, SUPABASE_URL, or SUPABASE_ANON_KEY." };
+export async function sendDigest(env) {
+  if (env.EMAIL_ENABLED !== "true") return { ok: true, sent_to: 0, note: "Email sending disabled." };
+  const { RESEND_API_KEY, DB } = env;
+  if (!RESEND_API_KEY || !DB) {
+    return { ok: false, error: "Missing RESEND_API_KEY or database binding." };
   }
 
   const sinceIso = new Date(Date.now() - DIGEST_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
 
   const [recipientsResult, entriesResult, productionResult] = await Promise.all([
-    fetchRecipients(SUPABASE_URL, SUPABASE_ANON_KEY).catch(err => ({ error: err.message })),
-    fetchRecentEntries(SUPABASE_URL, SUPABASE_ANON_KEY, "service_entries", sinceIso).catch(err => ({ error: err.message })),
-    fetchRecentEntries(SUPABASE_URL, SUPABASE_ANON_KEY, "production_entries", sinceIso).catch(err => ({ error: err.message })),
+    fetchRecipients(DB).catch(err => ({ error: err.message })),
+    fetchRecentEntries(DB, "service_entries", sinceIso).catch(err => ({ error: err.message })),
+    fetchRecentEntries(DB, "production_entries", sinceIso).catch(err => ({ error: err.message })),
   ]);
 
   if (recipientsResult.error) return { ok: false, error: recipientsResult.error };
@@ -243,17 +167,17 @@ async function sendDigest(env) {
     }),
   });
 
-  await pruneOldEmailLogs(SUPABASE_URL, SUPABASE_ANON_KEY);
+  await pruneEmailLogs(DB).catch(() => console.error("email_log_prune_failed"));
   const archivedHtml = html.replace(`cid:${LOGO_CID}`, LOGO_URL);
 
   if (!resendRes.ok) {
     const errBody = await resendRes.json().catch(() => ({}));
     const error = errBody.message || `Resend error (${resendRes.status})`;
-    await logEmailSend(SUPABASE_URL, SUPABASE_ANON_KEY, { kind: "weekly_digest", subject, recipients, status: "failed", error, htmlBody: archivedHtml });
+    await logEmailSend(DB, { kind: "weekly_digest", subject, recipients, status: "failed", error, htmlBody: archivedHtml });
     return { ok: false, error };
   }
 
-  await logEmailSend(SUPABASE_URL, SUPABASE_ANON_KEY, { kind: "weekly_digest", subject, recipients, status: "sent", htmlBody: archivedHtml });
+  await logEmailSend(DB, { kind: "weekly_digest", subject, recipients, status: "sent", htmlBody: archivedHtml });
   return { ok: true, sent_to: recipients.length };
 }
 
@@ -285,7 +209,9 @@ export default {
       return new Response("Method not allowed", { status: 405 });
     }
     const provided = request.headers.get("X-Digest-Secret");
-    if (!env.DIGEST_TEST_SECRET || provided !== env.DIGEST_TEST_SECRET) {
+    const actual = new TextEncoder().encode(provided || "");
+    const expected = new TextEncoder().encode(env.DIGEST_TEST_SECRET || "");
+    if (!expected.length || actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { "Content-Type": "application/json" } });
     }
     const result = await sendDigest(env);

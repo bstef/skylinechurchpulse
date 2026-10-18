@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { onRequest } from '../functions/api/data/[[path]].js';
 import { authorize, sameOriginWrite } from '../lib/access.js';
 import { allRows } from '../lib/d1-store.js';
 function database() {
   const sql = new DatabaseSync(':memory:');
-  sql.exec(readFileSync(new URL('../migrations/0001_initial.sql',import.meta.url),'utf8'));
+  for (const file of readdirSync(new URL('../migrations/',import.meta.url)).sort()) sql.exec(readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
   // Real SQLite execution; only adapt the asynchronous D1 interface.
   const db = { prepare(query) { return { bind(...params) { return {
     async all() { return { results:sql.prepare(query).all(...params) }; },
