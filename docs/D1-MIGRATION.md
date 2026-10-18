@@ -39,7 +39,7 @@ Cloudflare account: Peacockengr (`87d75a85659dd39b348acf458b75b606`).
 
 ## Remaining before cutover
 
-1. Deploy the tested branch to the isolated staging Pages project and verify Access redirects unauthorized browsers and middleware rejects untrusted requests.
+1. Staging deployment `a6248f08-9d76-4426-8d96-80c876f4ae88` succeeded for commit `e1000728a950736457a4799375e8597e0d59dfbc`. The base preview hostname shows the expected Cloudflare Access login. Live visual checks are waiting for the user's Google Workspace sign-in in the browser panel; no authenticated preview result has been claimed.
 2. Complete rendered browser checks: calendar, manual/PCO logging, edit/delete/undo, production, analytics, CSV/PDF, recipients, and email history. Set staging PCO secrets securely for live integration checks; email remains disabled.
 3. Create a separate production D1 database and apply both migrations. A final source snapshot is required; staging data is not automatically the final production data.
 4. Prepare exact cutover configuration changes: Pages name `skylinechurchpulse`, production DB binding, existing live Access audience, build command/output directory, production env vars, digest name/binding/schedules/secrets. Preview must remain on staging, with emails disabled. Review production secret names only; preserve existing values.
