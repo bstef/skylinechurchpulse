@@ -1,0 +1,26 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "skyline-pulse-weekly-digest-d1-staging",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-06",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "vars": {
+    "EMAIL_ENABLED": "false"
+  },
+  "triggers": {
+    "crons": []
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "skyline-pulse-staging",
+      "database_id": "2fed3452-8682-47d6-80a5-f230b4a9ce1e"
+    }
+  ]
+}

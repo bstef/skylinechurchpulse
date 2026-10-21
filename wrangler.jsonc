@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "skyline-pulse-d1-staging",
+  "pages_build_output_dir": "dist",
+  "compatibility_date": "2026-08-06",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "vars": {
+    "LOCAL_DEV": "false",
+    "EMAIL_ENABLED": "false",
+    "ACCESS_TEAM_DOMAIN": "peacockengr.cloudflareaccess.com",
+    "ACCESS_AUD": "224a7b45baa6172859ee57072095451be938c73b9db9fe3d63fd56ce3495fc66"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "skyline-pulse-staging",
+      "database_id": "2fed3452-8682-47d6-80a5-f230b4a9ce1e",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

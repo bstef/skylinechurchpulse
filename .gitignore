@@ -5,3 +5,8 @@
 .mcp.json
 .agents/
 skills-lock.json
+
+node_modules/
+backups/
+exports/
+dist/
