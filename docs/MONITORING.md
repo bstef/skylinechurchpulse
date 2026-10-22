@@ -6,13 +6,13 @@
 
 This native dashboard is already collecting total/read/write queries, rows read/written, query latency, storage and query insights. Use **Overview** and select a time range. It includes all callers, including the website, digest and administrative queries. Values can arrive with an analytics delay.
 
-## Datadog — activation needs two secrets and dashboard import
+## Datadog — dashboard created; activation needs two secrets
 
 Existing Datadog Cloudflare integration metrics are verified for `zone_name:skylinechurch.tech`. They cover site requests and response codes, including Access login redirects. They are not database query counts. The integration has Worker Script collection enabled but no Worker metrics were found at setup; this dashboard does not invent them.
 
-`monitoring/datadog-dashboard.json` is an ordered 12-widget dashboard for US1 (`app.datadoghq.com`). It includes site traffic, rolling D1 activity, average/p95 query latency, storage and an export heartbeat. The Datadog connection's organization policy blocks MCP writes, including its widget validator, so it could not create or validate the dashboard remotely. The JSON was prepared from Datadog's widget guidance; Datadog's import UI must validate it before saving.
+[Skyline Pulse — Database & Site Activity](https://app.datadoghq.com/dashboard/fe3-pye-rhj) is saved in Datadog with 12 verified widgets: site traffic, rolling D1 activity, average/p95 query latency, storage, an export heartbeat and guidance links. The dashboard remains private to the organization. D1 panels remain empty until both collector secrets are configured and ingestion succeeds.
 
-Import it through Datadog **Dashboards → New Dashboard** and the dashboard's **Import dashboard JSON** action. If the menu differs, search Datadog's dashboard controls for JSON import. The dashboard must remain private to your organization; there is no public sharing requirement.
+The organization's MCP policy blocks writes, so the widgets were created through Datadog's normal web editor and verified using the read-only dashboard API. No organization permissions were changed. `monitoring/datadog-dashboard.json` is a reusable definition with explicit fixed-grid coordinates; importing another dashboard is optional, not an activation requirement.
 
 ### Automatic collector
 
@@ -58,6 +58,6 @@ npx wrangler deploy --config monitoring/wrangler.jsonc
 
 ## Validation performed
 
-Fifteen tests pass, including aggregate transformation, correct window boundaries, no network when credentials are missing/disabled, idle-window behavior, upstream permission/schema failures and rejected Datadog submissions. The exact collector GraphQL query was executed successfully against the production database analytics using the connected Cloudflare account. Outbound Datadog submissions were stubbed in tests; no real ingestion API key is configured yet.
+Fifteen tests pass, including aggregate transformation, correct window boundaries, no network when credentials are missing/disabled, idle-window behavior, upstream permission/schema failures and rejected Datadog submissions. The exact collector GraphQL query was executed successfully against the production database analytics using the connected Cloudflare account. Outbound Datadog submissions were stubbed in tests; no real ingestion API key is configured yet. All 12 live dashboard widgets were saved through the UI and their queries retrieved through Datadog’s dashboard API on October 22, 2026.
 
 References: [Cloudflare D1 analytics](https://developers.cloudflare.com/d1/observability/metrics-analytics/), [Datadog Cloudflare integration](https://docs.datadoghq.com/integrations/cloudflare/), [Datadog metrics submission](https://docs.datadoghq.com/api/latest/metrics/#submit-metrics).
