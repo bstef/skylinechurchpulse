@@ -417,6 +417,18 @@ function dateKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function entriesForPlan(plan) {
+  const serviceType = guessServiceType(plan.plan_time_name || plan.service_type_name);
+  return entries.filter(entry => {
+    if (entry.pco_plan_id) {
+      return entry.pco_plan_id === plan.plan_id && (!serviceType || entry.service_type === serviceType);
+    }
+    // Manually logged services have no plan ID. Match only a known service
+    // time on the same date; never attach them to an ambiguous plan.
+    return !!serviceType && entry.service_date === plan.sort_date.slice(0, 10) && entry.service_type === serviceType;
+  });
+}
+
 function getCalendarEvents() {
   const events = entries.map(e => ({
     date: e.service_date,
@@ -429,7 +441,7 @@ function getCalendarEvents() {
   }));
   pcoPlans.forEach(p => {
     const matched = guessServiceType(p.plan_time_name || p.service_type_name);
-    const alreadyLogged = entries.some(e => e.pco_plan_id === p.plan_id && (!matched || e.service_type === matched));
+    const alreadyLogged = entriesForPlan(p).length > 0;
     if (alreadyLogged) return;
     events.push({
       date: p.sort_date.slice(0, 10),
@@ -2041,12 +2053,6 @@ function renderPcoSection(plans, filterState, opts) {
     return `${header}${checkinsNote}${filterRow}<div class="filter-empty">No plans for ${[...filterState].map(escapeHtml).join(", ")}.</div>`;
   }
 
-  const entriesByPlan = {};
-  entries.forEach(e => {
-    if (!e.pco_plan_id) return;
-    (entriesByPlan[e.pco_plan_id] ||= []).push(e);
-  });
-
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const rows = filteredPlans.map(p => {
@@ -2055,7 +2061,7 @@ function renderPcoSection(plans, filterState, opts) {
     const badge = matched
       ? `<span class="service-badge ${badgeClass(matched)}">${escapeHtml(matched)}</span>`
       : `<span class="service-badge badge-unmatched">${escapeHtml(matchSource)}</span>`;
-    const linked = (entriesByPlan[p.plan_id] || []).filter(e => !matched || e.service_type === matched);
+    const linked = entriesForPlan(p);
     const loggedPills = linked.map(e =>
       `<button class="status-pill status-logged pco-view-btn" data-id="${escapeHtml(e.id)}">${escapeHtml(e.service_type)} ✓</button>`
     ).join("");
