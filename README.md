@@ -2,7 +2,7 @@
 
 Weekly service intelligence for Skyline Church NJ: attendance, worship unity, audience engagement, production, Planning Center plans and responses, analytics, and reports.
 
-> **D1 migration branch — production still runs on Supabase.** Review [migration status and cutover/rollback instructions](docs/D1-MIGRATION.md) before merging. The checked-in deployment settings intentionally point to staging and disable emails.
+> **Production runs on Cloudflare D1 as of October 22, 2026.** [Open Skyline Pulse](https://skylinechurch.tech) · [Migration and recovery notes](docs/D1-MIGRATION.md). Supabase is retained read-only for recovery.
 
 ## Architecture
 
@@ -41,7 +41,7 @@ The localhost auth exception is ignored for deployed hostnames. Without a signed
 
 ## Bindings and authentication
 
-The checked-in `wrangler.jsonc` is for **skyline-pulse-d1-staging** only. Do not deploy it to the live Pages project without the cutover changes in the migration plan.
+The checked-in `wrangler.jsonc` targets the live **skylinechurchpulse** Pages project and **skyline-pulse-production** D1 database. Its preview environment uses the separate staging database with email disabled. `wrangler.staging.jsonc` targets the isolated, Access-protected **skyline-pulse-d1-staging** project.
 
 Required variables/bindings:
 
@@ -51,7 +51,8 @@ Required variables/bindings:
 | `ACCESS_TEAM_DOMAIN` | Existing Cloudflare Access team hostname |
 | `ACCESS_AUD` | Audience of the Access application protecting this deployment |
 | `LOCAL_DEV` | `false` for deployments |
-| `EMAIL_ENABLED` | `false` for all staging/preview deployments |
+| `EMAIL_ENABLED` | `true` in production; `false` for all staging/preview deployments |
+| `WRITES_ENABLED` | `true` normally; `false` temporarily blocks data mutations during maintenance |
 | `PCO_APP_ID`, `PCO_SECRET` | Planning Center Personal Access Token, set as secrets |
 | `RESEND_API_KEY` | Production email sending secret only |
 
@@ -67,7 +68,7 @@ The existing proxy functions retain service-type filtering, plan-to-service-time
 
 Pages report sends require **both** `EMAIL_ENABLED=true` and `CF_PAGES_BRANCH=main`, plus the D1 binding and `RESEND_API_KEY`. Preview calls are rejected even if a sending key is accidentally present. Recipients come from D1; success/failure history is written to `email_log`.
 
-The digest Worker has its own D1 binding and secrets. The current `cron-worker/wrangler.jsonc` has **no cron triggers**, a staging-only name, and `EMAIL_ENABLED=false`. Production scheduling is not changed by this branch. At the coordinated cutover, use the production database and existing digest name, preserve existing secrets, enable sending, and restore the two Monday UTC schedules (`0 12 * * 1` / `0 13 * * 1`). The handler sends only at 8 AM America/New_York to account for DST.
+The digest Worker has its own binding to the same production D1 database and its own secrets. `cron-worker/wrangler.jsonc` targets **skyline-pulse-weekly-digest**, with email enabled and both Monday UTC schedules (`0 12 * * 1` / `0 13 * * 1`). The handler sends only at 8 AM America/New_York to account for DST. Deploy it separately with `npx wrangler deploy --config cron-worker/wrangler.jsonc`. `cron-worker/wrangler.staging.jsonc` has no schedules and disables email.
 
 Do not run a manual digest against real recipients for a migration test. Verify with stubbed outbound requests first; a real test email needs explicit recipient/send authorization.
 
