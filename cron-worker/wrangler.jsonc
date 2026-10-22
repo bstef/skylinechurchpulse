@@ -1,16 +1,19 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
-  "name": "skyline-pulse-weekly-digest-d1-staging",
+  "name": "skyline-pulse-weekly-digest",
   "main": "src/index.js",
   "compatibility_date": "2026-08-06",
   "compatibility_flags": [
     "nodejs_compat"
   ],
   "vars": {
-    "EMAIL_ENABLED": "false"
+    "EMAIL_ENABLED": "true"
   },
   "triggers": {
-    "crons": []
+    "crons": [
+      "0 12 * * 1",
+      "0 13 * * 1"
+    ]
   },
   "observability": {
     "enabled": true,
@@ -19,8 +22,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "skyline-pulse-staging",
-      "database_id": "2fed3452-8682-47d6-80a5-f230b4a9ce1e"
+      "database_name": "skyline-pulse-production",
+      "database_id": "ebaf7a80-ec0c-430c-a782-bae2cd427cb2"
     }
   ]
 }

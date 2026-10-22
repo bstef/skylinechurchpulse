@@ -59,6 +59,7 @@ export async function onRequest(context) {
   try { def = tableDefinition(table); } catch { return fail('Not found.',404); }
   if (id && !UUID.test(id)) return fail('Invalid ID.');
   const method = request.method;
+  if (method !== 'GET' && env.WRITES_ENABLED === 'false') return fail('Database maintenance is in progress. Please try again shortly.', 503);
   try {
     if (method === 'GET' && !id) {
       const url = new URL(request.url);

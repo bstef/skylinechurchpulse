@@ -19,6 +19,14 @@ function request(db,table,method='GET',body=null,id=null) {
   return onRequest({env:{DB:db},params:{path:[table,...(id?[id]:[])]},request:new Request('https://pulse.test/api/data/'+table,{method,...(body?{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})})});
 }
 const entry={service_date:'2026-10-11',service_type:'9:30 AM',attendance:200,unity:4,engagement:4,loudness_db:90,sound_clarity:false,notes:"O'Brien",pco_plan_id:'plan1'};
+test('cutover maintenance permits reads but prevents mutations',async()=>{
+  const {db,sql}=database();
+  const call=method=>onRequest({env:{DB:db,WRITES_ENABLED:'false'},params:{path:['service_entries']},request:new Request('https://pulse.test/api/data/service_entries',{method})});
+  assert.equal((await call('GET')).status,200);
+  for(const method of ['POST','PATCH','DELETE']) assert.equal((await call(method)).status,503);
+  assert.equal(sql.prepare('SELECT count(*) n FROM service_entries').get().n,0);
+  sql.close();
+});
 test('service CRUD preserves boolean values and enforces uniqueness',async()=>{
   const {db,sql}=database();
   assert.equal((await request(db,'service_entries','POST',entry)).status,200);
