@@ -11,8 +11,8 @@
   },
   "triggers": {
     "crons": [
-      "0 12 * * 1",
-      "0 13 * * 1"
+      "0 12 * * MON",
+      "0 13 * * MON"
     ]
   },
   "observability": {

@@ -1,5 +1,5 @@
 // Weekly digest reads the same D1 database as Pages through a native binding.
-// Production remains on the previous deployment until the coordinated cutover.
+// Production uses this Worker with its native D1 binding.
 // EMAIL_ENABLED must explicitly be "true"; preview/local runs never send by default.
 import { recipients as fetchRecipients, allRows, logEmail as logEmailSend, pruneEmailLogs } from "../../lib/d1-store.js";
 import { timingSafeEqual } from "node:crypto";
@@ -124,11 +124,22 @@ function buildDigestHtml({ rangeLabel, entriesAvailable, productionAvailable, su
 </html>`;
 }
 
+async function digestFailure(env, error, recipients = [], subject = 'Skyline Pulse — Weekly Digest') {
+  if (env.DB) await logEmailSend(env.DB, {kind:'weekly_digest',subject,recipients,status:'failed',error});
+  return {ok:false,error};
+}
+
+export function isDigestTime(timestamp) {
+  const parts = new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',weekday:'short',hour:'2-digit',hourCycle:'h23'}).formatToParts(new Date(timestamp));
+  const value = type => parts.find(part => part.type === type)?.value;
+  return value('weekday') === 'Mon' && value('hour') === '08';
+}
+
 export async function sendDigest(env) {
   if (env.EMAIL_ENABLED !== "true") return { ok: true, sent_to: 0, note: "Email sending disabled." };
   const { RESEND_API_KEY, DB } = env;
   if (!RESEND_API_KEY || !DB) {
-    return { ok: false, error: "Missing RESEND_API_KEY or database binding." };
+    return digestFailure(env, "Missing RESEND_API_KEY or database binding.");
   }
 
   const sinceIso = new Date(Date.now() - DIGEST_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
@@ -139,7 +150,7 @@ export async function sendDigest(env) {
     fetchRecentEntries(DB, "production_entries", sinceIso).catch(err => ({ error: err.message })),
   ]);
 
-  if (recipientsResult.error) return { ok: false, error: recipientsResult.error };
+  if (recipientsResult.error) return digestFailure(env, recipientsResult.error);
   const recipients = recipientsResult;
   if (recipients.length === 0) return { ok: true, sent_to: 0, note: "No recipients configured — nothing sent." };
 
@@ -155,7 +166,9 @@ export async function sendDigest(env) {
 
   const html = buildDigestHtml({ rangeLabel, entriesAvailable, productionAvailable, sundayEntries, skyYouthEntries, production });
 
-  const resendRes = await fetch("https://api.resend.com/emails", {
+  let resendRes;
+  try {
+  resendRes = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -165,7 +178,11 @@ export async function sendDigest(env) {
       html,
       attachments: [{ content: LOGO_BASE64, filename: "skyline-pulse-logo.png", content_type: "image/png", content_id: LOGO_CID }],
     }),
+    signal: AbortSignal.timeout(15000),
   });
+  } catch {
+    return digestFailure(env, "Unable to reach Resend; check delivery provider availability.", recipients, subject);
+  }
 
   await pruneEmailLogs(DB).catch(() => console.error("email_log_prune_failed"));
   const archivedHtml = html.replace(`cid:${LOGO_CID}`, LOGO_URL);
@@ -183,18 +200,25 @@ export async function sendDigest(env) {
 
 export default {
   // The real trigger — Cloudflare fires this internally on the cron
-  // schedule in wrangler.toml. Two crons cover Eastern's DST offsets, so
+  // schedule in wrangler.jsonc. Two crons cover Eastern's DST offsets, so
   // only send when it's actually 8am Eastern to avoid a double-send.
   async scheduled(event, env, ctx) {
-    const hour = new Intl.DateTimeFormat("en-US", { hour: "2-digit", hour12: false, timeZone: "America/New_York" }).format(new Date());
-    if (hour !== "08") return;
+    const scheduledTime = event.scheduledTime;
+    if (!isDigestTime(scheduledTime)) {
+      console.log(JSON.stringify({event:'weekly_digest_skipped',reason:'outside_monday_8am_eastern',scheduledTime}));
+      return;
+    }
     // sendDigest() resolves (never rejects) even on failure — a plain
     // waitUntil(sendDigest(env)) would make a failed send look like a
     // successful scheduled run in Cloudflare's logs, with no error and no
     // way to notice a Monday digest silently didn't go out. Throw so the
     // invocation actually shows up as failed.
     ctx.waitUntil((async () => {
-      const result = await sendDigest(env);
+      console.log(JSON.stringify({event:'weekly_digest_started',scheduledTime}));
+      let result;
+      try { result = await sendDigest(env); }
+      catch { result = await digestFailure(env, 'Unexpected digest failure before completion.'); }
+      console.log(JSON.stringify({event:'weekly_digest_result',scheduledTime,ok:result.ok,sent_to:result.sent_to ?? 0,note:result.note ?? null,error:result.error ?? null}));
       if (!result.ok) throw new Error(result.error || "sendDigest failed");
     })());
   },

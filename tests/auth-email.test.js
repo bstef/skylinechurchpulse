@@ -4,7 +4,7 @@ import { generateKeyPair, exportJWK, createLocalJWKSet, SignJWT } from 'jose';
 import { verifyAccessToken } from '../lib/access.js';
 import { onRequest as middleware } from '../functions/api/_middleware.js';
 import { onRequestPost } from '../functions/api/send-report-email.js';
-import digest, { sendDigest } from '../cron-worker/src/index.js';
+import digest, { sendDigest, isDigestTime } from '../cron-worker/src/index.js';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 const issuer='https://peacockengr.cloudflareaccess.com';
@@ -67,5 +67,32 @@ test('weekly digest uses D1 data and prunes only expired logs (network stubbed)'
     assert.equal((await sendDigest({EMAIL_ENABLED:'true',RESEND_API_KEY:'test',DB})).sent_to,1);
     assert.equal(sql.prepare('SELECT count(*) n FROM email_log').get().n,1);
     assert.equal(sql.prepare('SELECT kind FROM email_log').get().kind,'weekly_digest');
+  } finally {globalThis.fetch=realFetch;sql.close();}
+});
+test('digest cron uses explicit MON and the scheduled Eastern Monday time across DST',async()=>{
+  const config=JSON.parse(readFileSync(new URL('../cron-worker/wrangler.jsonc',import.meta.url),'utf8'));
+  assert.deepEqual(config.triggers.crons,['0 12 * * MON','0 13 * * MON']);
+  for(const stamp of ['2026-10-19T12:00:00Z','2026-12-07T13:00:00Z','2026-11-02T13:00:00Z','2027-03-15T12:00:00Z'])assert.equal(isDigestTime(Date.parse(stamp)),true);
+  for(const stamp of ['2026-10-18T12:00:00Z','2026-10-19T13:00:00Z','2026-12-07T12:00:00Z'])assert.equal(isDigestTime(Date.parse(stamp)),false);
+  const {sql,DB}=dbSetup();sql.prepare('INSERT INTO email_recipients(id,email) VALUES (?,?)').run('test','test@example.com');
+  const realFetch=globalThis.fetch;let sends=0;
+  globalThis.fetch=async()=>{sends++;return Response.json({id:'mock'});};
+  try {
+    const work=[];const ctx={waitUntil(promise){work.push(promise);}};
+    await digest.scheduled({scheduledTime:Date.parse('2026-10-18T12:00:00Z')},{EMAIL_ENABLED:'true',RESEND_API_KEY:'test',DB},ctx);
+    assert.equal(work.length,0);
+    await digest.scheduled({scheduledTime:Date.parse('2026-10-19T12:00:00Z')},{EMAIL_ENABLED:'true',RESEND_API_KEY:'test',DB},ctx);
+    await Promise.all(work);assert.equal(sends,1);
+  } finally {globalThis.fetch=realFetch;sql.close();}
+});
+test('early configuration and network failures are recorded without claiming delivery',async()=>{
+  const {sql,DB}=dbSetup();sql.prepare('INSERT INTO email_recipients(id,email) VALUES (?,?)').run('test','test@example.com');
+  const realFetch=globalThis.fetch;
+  try {
+    assert.equal((await sendDigest({EMAIL_ENABLED:'true',DB})).ok,false);
+    globalThis.fetch=async()=>{throw Error('Network failure');};
+    assert.equal((await sendDigest({EMAIL_ENABLED:'true',RESEND_API_KEY:'test',DB})).ok,false);
+    const logs=sql.prepare('SELECT status,error FROM email_log').all();
+    assert.equal(logs.length,2);assert.ok(logs.every(row=>row.status==='failed'&&row.error));
   } finally {globalThis.fetch=realFetch;sql.close();}
 });

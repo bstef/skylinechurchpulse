@@ -145,7 +145,7 @@ Workers are deployed **separately** from the Pages website. Each has its own con
 | `skyline-pulse-d1-metrics` | Every **5 minutes** | `monitoring/wrangler.jsonc` |
 | `skyline-pulse-staging-sync` | Daily, **3 a.m. Eastern** | `staging-sync/wrangler.jsonc` |
 
-The digest and staging refresh use paired UTC schedules with an America/New_York time guard to handle daylight saving changes.
+The digest uses explicit `MON` cron expressions (`0 12 * * MON` and `0 13 * * MON`) and checks the scheduled Eastern weekday/hour. Cloudflare numbers Sunday as `1`, so weekday names avoid ambiguity. The nightly staging refresh also uses paired UTC schedules with an America/New_York time guard for daylight saving changes.
 
 Deploy only the Worker you changed:
 
