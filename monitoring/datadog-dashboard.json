@@ -1,0 +1,376 @@
+{
+  "title": "Skyline Pulse — Database & Site Activity",
+  "description": "Production D1 rolling activity, query latency, storage, collector heartbeat and existing Cloudflare zone traffic. D1 charts require the two collector secrets; blank charts do not mean zero usage.",
+  "layout_type": "ordered",
+  "widgets": [
+    {
+      "layout": {
+        "width": 12,
+        "height": 3
+      },
+      "definition": {
+        "type": "note",
+        "has_padding": true,
+        "content": "## Skyline Pulse — Database & Site Activity\n[Cloudflare D1 activity](https://dash.cloudflare.com/87d75a85659dd39b348acf458b75b606/workers/d1/databases/ebaf7a80-ec0c-430c-a782-bae2cd427cb2/metrics) · [Pulse](https://skylinechurch.tech) · [Collector settings](https://dash.cloudflare.com/87d75a85659dd39b348acf458b75b606/workers/services/view/skyline-pulse-d1-metrics/production/settings)\nDatabase metrics refresh every 5 minutes after both collector secrets are configured. Counts are **rolling 15-minute gauges**, delayed 5 minutes for analytics ingestion; do not sum successive points. A blank graph means no fresh telemetry, not zero activity. Site traffic includes Cloudflare Access login redirects and is separate from database queries."
+      }
+    },
+    {
+      "layout": {
+        "width": 3,
+        "height": 2
+      },
+      "definition": {
+        "type": "query_value",
+        "title": "Read queries · last 15m",
+        "autoscale": true,
+        "precision": 2,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "name": "value",
+                "data_source": "metrics",
+                "query": "avg:skyline.pulse.d1.read_queries_15m{service:skyline-pulse,env:production,database:skyline-pulse-production}.fill(null)",
+                "aggregator": "last"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "value"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "layout": {
+        "width": 3,
+        "height": 2
+      },
+      "definition": {
+        "type": "query_value",
+        "title": "Write queries · last 15m",
+        "autoscale": true,
+        "precision": 2,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "name": "value",
+                "data_source": "metrics",
+                "query": "avg:skyline.pulse.d1.write_queries_15m{service:skyline-pulse,env:production,database:skyline-pulse-production}.fill(null)",
+                "aggregator": "last"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "value"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "layout": {
+        "width": 3,
+        "height": 2
+      },
+      "definition": {
+        "type": "query_value",
+        "title": "Rows read · last 15m",
+        "autoscale": true,
+        "precision": 2,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "name": "value",
+                "data_source": "metrics",
+                "query": "avg:skyline.pulse.d1.rows_read_15m{service:skyline-pulse,env:production,database:skyline-pulse-production}.fill(null)",
+                "aggregator": "last"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "value"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "layout": {
+        "width": 3,
+        "height": 2
+      },
+      "definition": {
+        "type": "query_value",
+        "title": "Rows written · last 15m",
+        "autoscale": true,
+        "precision": 2,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "name": "value",
+                "data_source": "metrics",
+                "query": "avg:skyline.pulse.d1.rows_written_15m{service:skyline-pulse,env:production,database:skyline-pulse-production}.fill(null)",
+                "aggregator": "last"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "value"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "layout": {
+        "width": 6,
+        "height": 3
+      },
+      "definition": {
+        "type": "timeseries",
+        "title": "Database query latency · milliseconds",
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "display_type": "line",
+            "queries": [
+              {
+                "name": "average",
+                "data_source": "metrics",
+                "query": "avg:skyline.pulse.d1.latency_avg_ms{service:skyline-pulse,env:production,database:skyline-pulse-production}.fill(null)"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "average"
+              }
+            ]
+          },
+          {
+            "response_format": "timeseries",
+            "display_type": "line",
+            "queries": [
+              {
+                "name": "p95",
+                "data_source": "metrics",
+                "query": "avg:skyline.pulse.d1.latency_p95_ms{service:skyline-pulse,env:production,database:skyline-pulse-production}.fill(null)"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "p95"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "layout": {
+        "width": 6,
+        "height": 3
+      },
+      "definition": {
+        "type": "timeseries",
+        "title": "Rows scanned / written · rolling 15m",
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "display_type": "line",
+            "queries": [
+              {
+                "name": "read",
+                "data_source": "metrics",
+                "query": "avg:skyline.pulse.d1.rows_read_15m{service:skyline-pulse,env:production,database:skyline-pulse-production}.fill(null)"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "read"
+              }
+            ]
+          },
+          {
+            "response_format": "timeseries",
+            "display_type": "line",
+            "queries": [
+              {
+                "name": "written",
+                "data_source": "metrics",
+                "query": "avg:skyline.pulse.d1.rows_written_15m{service:skyline-pulse,env:production,database:skyline-pulse-production}.fill(null)"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "written"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "layout": {
+        "width": 4,
+        "height": 2
+      },
+      "definition": {
+        "type": "query_value",
+        "title": "Database storage · 24h maximum",
+        "autoscale": true,
+        "precision": 2,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "name": "value",
+                "data_source": "metrics",
+                "query": "avg:skyline.pulse.d1.storage_max_24h_bytes{service:skyline-pulse,env:production,database:skyline-pulse-production}.fill(null)",
+                "aggregator": "last"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "value"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "layout": {
+        "width": 4,
+        "height": 2
+      },
+      "definition": {
+        "type": "query_value",
+        "title": "Collector heartbeat · 1 = last successful export",
+        "autoscale": true,
+        "precision": 2,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "name": "value",
+                "data_source": "metrics",
+                "query": "avg:skyline.pulse.d1.collector_heartbeat{service:skyline-pulse,env:production,database:skyline-pulse-production}.fill(null)",
+                "aggregator": "last"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "value"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "layout": {
+        "width": 4,
+        "height": 2
+      },
+      "definition": {
+        "type": "query_value",
+        "title": "Site requests · selected time range",
+        "autoscale": true,
+        "precision": 2,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "name": "value",
+                "data_source": "metrics",
+                "query": "sum:cloudflare.requests.all{zone_name:skylinechurch.tech}.as_count()",
+                "aggregator": "sum"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "value"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "layout": {
+        "width": 6,
+        "height": 3
+      },
+      "definition": {
+        "type": "timeseries",
+        "title": "Site requests · skylinechurch.tech",
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "display_type": "line",
+            "queries": [
+              {
+                "name": "requests",
+                "data_source": "metrics",
+                "query": "sum:cloudflare.requests.all{zone_name:skylinechurch.tech}.as_count()"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "requests"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "layout": {
+        "width": 6,
+        "height": 3
+      },
+      "definition": {
+        "type": "timeseries",
+        "title": "Site response status · includes Access redirects",
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "display_type": "line",
+            "queries": [
+              {
+                "name": "status",
+                "data_source": "metrics",
+                "query": "sum:cloudflare.requests.status{zone_name:skylinechurch.tech} by {http_status}.as_count()"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "status"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "tags": [
+    "service:skyline-pulse",
+    "env:production"
+  ]
+}
