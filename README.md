@@ -81,6 +81,8 @@ Do not run a manual digest against real recipients for a migration test. Verify 
 
 See [D1-MIGRATION.md](docs/D1-MIGRATION.md) for the source audit, staging IDs, validation results, write-freeze procedure, and rollback considerations.
 
+Staging receives a one-way production data refresh each night at **3 a.m. Eastern** through the separate `staging-sync/` Worker. Staging test changes are replaced; production remains unchanged. See [staging refresh operations](docs/STAGING-SYNC.md) for verification, pausing, recovery and deployment.
+
 ## Database monitoring
 
 Use the [Cloudflare D1 activity dashboard](https://dash.cloudflare.com/87d75a85659dd39b348acf458b75b606/workers/d1/databases/ebaf7a80-ec0c-430c-a782-bae2cd427cb2/metrics) for live query/row counts, latency and storage. The separate `monitoring/` Worker prepares automatic, aggregate-only Datadog metrics every five minutes; activation requires two secret bindings. An importable Datadog dashboard is included. See [monitoring setup and verification](docs/MONITORING.md) for the remaining secret/import steps and metric semantics.
