@@ -1,0 +1,16 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "skyline-pulse-d1-metrics",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "vars": {
+    "METRICS_ENABLED": "true",
+    "CF_ACCOUNT_ID": "87d75a85659dd39b348acf458b75b606",
+    "D1_DATABASE_ID": "ebaf7a80-ec0c-430c-a782-bae2cd427cb2",
+    "D1_DATABASE_NAME": "skyline-pulse-production"
+  },
+  "triggers": {"crons": ["*/5 * * * *"]},
+  "observability": {"enabled": true, "head_sampling_rate": 1}
+}
