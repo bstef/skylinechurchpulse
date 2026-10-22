@@ -1,88 +1,218 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/SkylinePulseDark-removebg-preview.png">
+  <img src="assets/SkylinePulseLight-removebg-preview.png" alt="Skyline Pulse" width="320">
+</picture>
+
 # Skyline Pulse
 
-Weekly service intelligence for Skyline Church NJ: attendance, worship unity, audience engagement, production, Planning Center plans and responses, analytics, and reports.
+**A clearer picture of every gathering at Skyline Church NJ.**
 
-> **Production runs on Cloudflare D1 as of October 22, 2026.** [Open Skyline Pulse](https://skylinechurch.tech) · [Migration and recovery notes](docs/D1-MIGRATION.md). Supabase is retained read-only for recovery.
+Skyline Pulse brings service attendance, worship and engagement feedback, production readiness, and Planning Center information into one place. Teams can log what happened, review trends, and share reports throughout the week.
 
-## Architecture
+[Open the app](https://skylinechurch.tech) · [Project overview](https://bstef.com/skylinechurchpulse/) · [User guide](https://skylinechurch.tech/docs/guide.html) · [Report an issue](https://github.com/bstef/skylinechurchpulse/issues)
 
-- `index.html`: existing interface and charts; reads/writes the same-origin `/api/data/` API.
-- Cloudflare Pages Functions: validates Cloudflare Access JWTs, validates inputs, and queries D1 with prepared statements. Database credentials are not shipped to the browser.
-- D1: service/production records, report recipients, email history, and a preserved legacy host table.
-- Planning Center: existing Pages Functions proxy Services, Check-Ins, and People. API credentials remain server-side.
-- Resend: optional report emails and weekly digest; disabled unless explicitly enabled.
-- `cron-worker/`: separately deployed weekly digest Worker, reading D1 directly through its binding. It does not need to bypass Access on the website.
+The live app is protected by **Cloudflare Access**. Production has used **Cloudflare D1** since October 22, 2026; Supabase is retained read-only for migration recovery.
 
-## Development and checks
+[Features](#features) · [Local development](#local-development) · [Deployment](#deployment) · [Scheduled jobs](#scheduled-jobs) · [Monitoring](#monitoring) · [Data and recovery](#data-and-recovery)
 
-Requires Node 24 or newer for the built-in SQLite unit tests.
+## Features
+
+| Area | What teams can do |
+|---|---|
+| Sunday Services | Log attendance, unity, engagement, sound, service flow, host feedback, and notes. Open saved details from the matching Planning Center plan. |
+| Production | Track role coverage, slides, missed cues, and production feedback. |
+| SkyYouth | Keep youth services and their Planning Center plans in a dedicated view. |
+| Serving and Church Stats | Review Planning Center responses and attendance information from connected integrations. |
+| Calendar | Find logged services and plans by date, with day and month views. |
+| Analytics | Review attendance, experience scores, production trends, and logging activity. |
+| Reports | Export CSV and PDF tables, print reports, and email reports to configured recipients. |
+| Appearance | Switch between Light, Dark, and Ocean themes. |
+
+Manually logged services without a Planning Center plan ID are recognized by matching their date and known service time. This keeps existing records visible and prevents duplicate “needs details” calendar reminders.
+
+## How it works
+
+The browser calls same-origin Pages Functions for data and integrations. Functions validate the user's Cloudflare Access session and inputs, then query D1 with prepared statements. Planning Center and email credentials stay on the server.
+
+| Component | Responsibility |
+|---|---|
+| Cloudflare Pages | Hosts the interface and `/api/` Functions. |
+| Production D1 | Stores service and production records, report recipients, email history, and preserved legacy data. |
+| Planning Center | Supplies plans, attendance prefill, and volunteer-response information through server-side proxies. |
+| Resend | Delivers authorized reports and the weekly digest. |
+| Weekly digest Worker | Reads production D1 directly and sends the Monday report. |
+| Metrics Worker | Sends aggregate D1 analytics to Datadog every five minutes. |
+| Staging refresh Worker | Copies production data to the separate staging database nightly. |
+
+The scheduled jobs run on Cloudflare. They do not require a local computer, n8n, or a Proxmox host.
+
+## Local development
+
+Use **Node.js 24 or newer** and npm. Local D1 uses SQLite; local development does not need production database credentials.
+
+1. Install dependencies:
+
+   ```sh
+   npm ci
+   ```
+
+2. Create a git-ignored `.dev.vars` file in the repository root:
+
+   ```dotenv
+   LOCAL_DEV="true"
+   EMAIL_ENABLED="false"
+   ```
+
+3. Create the local database schema:
+
+   ```sh
+   npm run db:local
+   ```
+
+4. Build the static assets:
+
+   ```sh
+   npm run build
+   ```
+
+5. Start the local app:
+
+   ```sh
+   npm run dev
+   ```
+
+Open [localhost:8788](http://localhost:8788). Rebuild after changing static files. Planning Center features need local `PCO_APP_ID` and `PCO_SECRET` values in `.dev.vars`; manual logging works without them.
+
+`LOCAL_DEV=true` only permits the localhost development exception. Deployed APIs still require a valid, signed Access assertion.
+
+### Checks
+
+Run the unit and integration suite:
 
 ```sh
-npm ci
 npm test
-npm run build
+```
+
+After `npm run build`, exercise the Pages Functions in the native workerd/D1 runtime:
+
+```sh
 npm run test:runtime
-npm run db:local
-npm run dev
 ```
 
-For local development only, create a git-ignored `.dev.vars`:
+Exercise staging refresh and rollback against native local D1 databases:
 
-```text
-LOCAL_DEV="true"
-EMAIL_ENABLED="false"
+```sh
+npm run test:staging-sync-runtime
 ```
 
-The localhost auth exception is ignored for deployed hostnames. Without a signed Access assertion, deployed API requests fail closed.
+Tests use synthetic records and stub email delivery. They do not modify production or send email to church staff.
 
-`npm run build` copies only the intended static files into `dist/`. Source code, exports, SQL, tests, dependencies and migration notes are excluded. Pages must use **build command `npm run build`** and **output directory `dist`**.
+## Deployment
 
-`npm run test:runtime` compiles the Pages Functions and exercises them inside workerd with native D1. Tests use synthetic records and stub outbound email; they do not email church staff or change production data.
+The production Pages project deploys from `main` with **build command `npm run build`** and **output directory `dist`**. The build publishes only intended static assets; application snapshots, SQL, source modules, tests, and dependencies stay out of the public output.
 
-## Bindings and authentication
+| Environment | Configuration | Database | Email |
+|---|---|---|---|
+| Production — `skylinechurchpulse` | `wrangler.jsonc` | `skyline-pulse-production` | Enabled |
+| Production project previews | `wrangler.jsonc` → `env.preview` | `skyline-pulse-staging` | Disabled |
+| Dedicated staging — `skyline-pulse-d1-staging` | `wrangler.staging.jsonc` | `skyline-pulse-staging` | Disabled |
 
-The checked-in `wrangler.jsonc` targets the live **skylinechurchpulse** Pages project and **skyline-pulse-production** D1 database. Its preview environment uses the separate staging database with email disabled. `wrangler.staging.jsonc` targets the isolated, Access-protected **skyline-pulse-d1-staging** project.
+The dedicated staging project's automatic deployments are paused. Its database still receives the nightly refresh. Staging and preview deployments must retain Cloudflare Access protection and their separate database binding.
 
-Required variables/bindings:
+### App configuration
 
-| Name | Purpose |
+| Binding or variable | Purpose |
 |---|---|
-| `DB` | Native D1 database binding; staging and production must be separate |
-| `ACCESS_TEAM_DOMAIN` | Existing Cloudflare Access team hostname |
-| `ACCESS_AUD` | Audience of the Access application protecting this deployment |
-| `LOCAL_DEV` | `false` for deployments |
-| `EMAIL_ENABLED` | `true` in production; `false` for all staging/preview deployments |
-| `WRITES_ENABLED` | `true` normally; `false` temporarily blocks data mutations during maintenance |
-| `PCO_APP_ID`, `PCO_SECRET` | Planning Center Personal Access Token, set as secrets |
-| `RESEND_API_KEY` | Production email sending secret only |
+| `DB` | Native D1 binding for the deployment's database. |
+| `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` | Cloudflare Access issuer and application audience. |
+| `LOCAL_DEV` | `false` on every deployment. |
+| `EMAIL_ENABLED` | `true` for production email; `false` for staging and previews. |
+| `WRITES_ENABLED` | Set to `false` during maintenance to block data mutations while retaining reads. |
+| `PCO_APP_ID`, `PCO_SECRET` | Planning Center integration credentials, stored as secrets. |
+| `RESEND_API_KEY` | Production email credential, stored as a secret. |
 
-Access must protect both the main hostname and deployment aliases. The Functions also validate token signature, issuer, audience, and expiry to protect direct requests to an accidentally unprotected alias. Mutations require a matching Origin header. Do not replace this with a trusted header or unsigned JWT check.
+Protect the main hostname and deployment aliases with Access. The API also verifies JWT signatures, issuer, audience, and expiry; writes require a matching Origin header. Never commit credentials or private exports.
 
-## Planning Center
+Planning Center credentials require the integration account's necessary Services, Check-Ins, and People permissions. Integration failures are shown in the app; they do not prevent manual logging.
 
-Create a Personal Access Token in Planning Center with the existing integration account's necessary Services, Check-Ins and People permissions. Set `PCO_APP_ID` and `PCO_SECRET` in each environment that needs live integration, then redeploy. Never commit credentials.
+## Scheduled jobs
 
-The existing proxy functions retain service-type filtering, plan-to-service-time matching, attendance prefill, historical plan loading, and volunteer-response grouping. Integration sections show an error if credentials/permissions are unavailable; manual service logging and the D1 ledger remain available.
+Workers are deployed **separately** from the Pages website. Each has its own configuration and bindings.
 
-## Email and scheduled digest
+| Worker | Schedule | Configuration |
+|---|---|---|
+| `skyline-pulse-weekly-digest` | Monday, **8 a.m. Eastern** | `cron-worker/wrangler.jsonc` |
+| `skyline-pulse-d1-metrics` | Every **5 minutes** | `monitoring/wrangler.jsonc` |
+| `skyline-pulse-staging-sync` | Daily, **3 a.m. Eastern** | `staging-sync/wrangler.jsonc` |
 
-Pages report sends require **both** `EMAIL_ENABLED=true` and `CF_PAGES_BRANCH=main`, plus the D1 binding and `RESEND_API_KEY`. Preview calls are rejected even if a sending key is accidentally present. Recipients come from D1; success/failure history is written to `email_log`.
+The digest and staging refresh use paired UTC schedules with an America/New_York time guard to handle daylight saving changes.
 
-The digest Worker has its own binding to the same production D1 database and its own secrets. `cron-worker/wrangler.jsonc` targets **skyline-pulse-weekly-digest**, with email enabled and both Monday UTC schedules (`0 12 * * 1` / `0 13 * * 1`). The handler sends only at 8 AM America/New_York to account for DST. Deploy it separately with `npx wrangler deploy --config cron-worker/wrangler.jsonc`. `cron-worker/wrangler.staging.jsonc` has no schedules and disables email.
+Deploy only the Worker you changed:
 
-Do not run a manual digest against real recipients for a migration test. Verify with stubbed outbound requests first; a real test email needs explicit recipient/send authorization.
+```sh
+npx wrangler deploy --config cron-worker/wrangler.jsonc
+```
+
+```sh
+npx wrangler deploy --config monitoring/wrangler.jsonc
+```
+
+```sh
+npx wrangler deploy --config staging-sync/wrangler.jsonc
+```
+
+### Reports and weekly digest
+
+Website report sends require `EMAIL_ENABLED=true`, `CF_PAGES_BRANCH=main`, and the Resend secret. The digest uses its own production D1 binding and email secret. Recipients come from D1, and email history records success or failure. The staging digest configuration has no schedules and disables email.
+
+Use stubbed delivery for development. A real test send requires an explicitly approved recipient.
+
+### Nightly staging refresh
+
+Production is the source of truth. Each refresh copies all five application tables **from production to staging**, verifies full record contents, and replaces staging test changes. It never copies staging edits back into production.
+
+The refresh checks matching schemas, uses a staging transaction, and logs a recovery bookmark before replacing records. Pause it with `SYNC_ENABLED=false` when staging test data needs to survive overnight. Changes after a snapshot wait until the next refresh; this is not continuous replication.
+
+See [staging refresh operations](docs/STAGING-SYNC.md) for verification, safety limits, recovery, and deployment. The schedule is deployed; its first overnight run was pending at setup on October 22, 2026.
+
+## Monitoring
+
+- [Cloudflare production D1 dashboard](https://dash.cloudflare.com/87d75a85659dd39b348acf458b75b606/workers/d1/databases/ebaf7a80-ec0c-430c-a782-bae2cd427cb2/metrics): queries, rows read/written, latency, and storage.
+- [Datadog — Database & Site Activity](https://app.datadoghq.com/dashboard/fe3-pye-rhj): 12 saved panels for D1 activity, latency, storage, collector health, and site traffic.
+
+Datadog ingestion was verified on October 22, 2026 using successful collector logs and fresh heartbeat/storage metrics. The collector exports aggregate analytics only; it has no D1 binding and sends no service notes, personal details, or SQL text to Datadog.
+
+D1 counts in Datadog are **rolling 15-minute gauges**, not additive daily totals. Storage is the maximum observed over 24 hours. Idle latency panels may be blank. Health endpoints report configuration; use Worker logs and fresh Datadog points to confirm successful delivery.
+
+See [monitoring setup and verification](docs/MONITORING.md) for credential rotation, metric definitions, and troubleshooting.
 
 ## Data and recovery
 
-- `migrations/`: D1 schema migrations. Apply in order to a new database.
-- `db/schema.sql`: historical Supabase schema, retained for reference; it does not represent every live legacy column. Do not run it as a migration/recovery script.
-- `scripts/prepare-migration.mjs`: validates a private source snapshot, prepares D1 inserts and PostgreSQL recovery SQL, restores to SQLite, and computes per-table verification hashes. Output belongs in git-ignored `exports/`, never in static assets or Git.
-- Keep independent exports as well as D1's managed recovery features. Test recovery before relying on it.
+D1 is the active database. Supabase is retained read-only as a migration recovery source; it does not receive new production writes.
 
-See [D1-MIGRATION.md](docs/D1-MIGRATION.md) for the source audit, staging IDs, validation results, write-freeze procedure, and rollback considerations.
+| Resource | Purpose |
+|---|---|
+| `migrations/` | Versioned D1 schema migrations. |
+| `db/schema.sql` | Historical Supabase reference; not a complete live schema or recovery script. |
+| `scripts/prepare-migration.mjs` | Validates private migration snapshots, prepares recovery SQL, and verifies SQLite restore parity. |
+| `docs/D1-MIGRATION.md` | Cutover audit, integrity checks, write freeze, and rollback procedure. |
 
-Staging receives a one-way production data refresh each night at **3 a.m. Eastern** through the separate `staging-sync/` Worker. Staging test changes are replaced; production remains unchanged. See [staging refresh operations](docs/STAGING-SYNC.md) for verification, pausing, recovery and deployment.
+Keep independent private exports alongside D1's managed recovery features. Backups belong outside the public build and Git. Reconcile any new D1 records before a rollback to Supabase; reverting website code alone does not migrate data back.
 
-## Database monitoring
+A read-only audit on October 22, 2026 found all five production application tables matched Supabase field for field. Both October 18 services were present; their apparent absence was a plan-matching display bug, now fixed. Staging was subsequently refreshed and verified against production.
 
-Use the [Cloudflare D1 activity dashboard](https://dash.cloudflare.com/87d75a85659dd39b348acf458b75b606/workers/d1/databases/ebaf7a80-ec0c-430c-a782-bae2cd427cb2/metrics) for live query/row counts, latency and storage. The separate `monitoring/` Worker prepares automatic, aggregate-only Datadog metrics every five minutes; activation requires two secret bindings. An importable Datadog dashboard is included. See [monitoring setup and verification](docs/MONITORING.md) for the remaining secret/import steps and metric semantics.
+## Repository map
+
+```text
+index.html                  Interface, charts, calendars, and report views
+assets/                     Branding and same-origin data client
+functions/api/              Protected data and integration endpoints
+lib/                        D1 access and authentication helpers
+migrations/                 D1 schema migrations
+cron-worker/                Monday email digest
+monitoring/                 Aggregate D1 metrics collector
+staging-sync/               Nightly production-to-staging refresh
+tests/                      Automated checks and native D1 exercises
+scripts/                    Static build and migration preparation
+docs/                       Project page, user guide, and operating notes
+```
