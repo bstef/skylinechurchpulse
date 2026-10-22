@@ -1,0 +1,14 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "skyline-pulse-staging-sync",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {"SYNC_ENABLED":"true"},
+  "triggers": {"crons":["0 7 * * *","0 8 * * *"]},
+  "observability": {"enabled":true,"head_sampling_rate":1},
+  "d1_databases": [
+    {"binding":"PRODUCTION_DB","database_name":"skyline-pulse-production","database_id":"ebaf7a80-ec0c-430c-a782-bae2cd427cb2"},
+    {"binding":"STAGING_DB","database_name":"skyline-pulse-staging","database_id":"2fed3452-8682-47d6-80a5-f230b4a9ce1e"}
+  ]
+}
