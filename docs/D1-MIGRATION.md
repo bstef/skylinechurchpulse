@@ -8,7 +8,7 @@ Production switched from Supabase to Cloudflare D1 on **October 22, 2026**.
 - D1: `skyline-pulse-production`, ID `ebaf7a80-ec0c-430c-a782-bae2cd427cb2`.
 - Pages builds with `npm run build`, output `dist`; only intended static assets are published.
 - The website and `skyline-pulse-weekly-digest` both bind directly to this database.
-- Production data writes and report emails are enabled. The digest retains its Monday 8 AM America/New_York schedule, with two UTC triggers and the existing DST guard.
+- Production data writes and report emails are enabled. The digest targets Monday 8 AM America/New_York. A subsequent email audit corrected the UTC triggers to explicit `MON` (Cloudflare interprets weekday `1` as Sunday) and added a scheduled-time weekday/hour guard and early-failure logging.
 - Existing Cloudflare Access policies and Planning Center/Resend secret values were preserved. APIs additionally verify signed Access assertions and same-origin writes.
 - Root `wrangler.jsonc` and `cron-worker/wrangler.jsonc` are the production configurations. The `*.staging.jsonc` files explicitly target isolated staging. Production previews bind to staging and disable email; they never use the production database.
 
