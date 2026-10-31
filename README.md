@@ -222,4 +222,4 @@ docs/                       Project page, user guide, and operating notes
 
 ## Mobile app
 
-The iOS and Android app lives in [`mobile/`](mobile/README.md) and is built with Expo. It signs in through a separate Access for SaaS (OIDC) application and calls the bearer-token routes under `/api/mobile/*` (see [mobile API](docs/MOBILE-API.md)). It has its own dependencies and tests (`cd mobile && npm ci && npm test`) and is not part of the Pages build.
+The iOS and Android app lives in [`mobile/`](mobile/README.md) and is built with Expo. It signs in through a separate Access for SaaS (OIDC) application and calls the bearer-token routes under `/api/mobile/*` (see [mobile API](docs/MOBILE-API.md)). Progress and remaining work are tracked in the [mobile roadmap](docs/MOBILE-ROADMAP.md). It has its own dependencies and tests (`cd mobile && npm ci && npm test`) and is not part of the Pages build.
