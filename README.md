@@ -125,6 +125,7 @@ The dedicated staging project's automatic deployments are paused. Its database s
 |---|---|
 | `DB` | Native D1 binding for the deployment's database. |
 | `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` | Cloudflare Access issuer and application audience. |
+| `ACCESS_MOBILE_CLIENT_ID` | Client ID of the Access for SaaS (OIDC) application used by the mobile apps. Unset keeps `/api/mobile/*` closed. See [mobile API](docs/MOBILE-API.md). |
 | `LOCAL_DEV` | `false` on every deployment. |
 | `EMAIL_ENABLED` | `true` for production email; `false` for staging and previews. |
 | `WRITES_ENABLED` | Set to `false` during maintenance to block data mutations while retaining reads. |
@@ -132,6 +133,8 @@ The dedicated staging project's automatic deployments are paused. Its database s
 | `RESEND_API_KEY` | Production email credential, stored as a secret. |
 
 Protect the main hostname and deployment aliases with Access. The API also verifies JWT signatures, issuer, audience, and expiry; writes require a matching Origin header. Never commit credentials or private exports.
+
+The mobile apps call the same handlers under `/api/mobile/*` with a bearer token instead of the Access cookie. That path is the only one bypassed at the Access edge, and every request on it is verified in the function. See [mobile API](docs/MOBILE-API.md) for the dashboard setup.
 
 Planning Center credentials require the integration account's necessary Services, Check-Ins, and People permissions. Integration failures are shown in the app; they do not prevent manual logging.
 

@@ -31,6 +31,10 @@ try {
  assert.deepEqual((await call('service_entries')).body.data,[]);
  const denied=await mf.dispatchFetch(origin+'/api/data/service_entries',{method:'POST',headers:{Origin:'https://foreign.test','Content-Type':'application/json'},body:JSON.stringify(record)});assert.equal(denied.status,403);
  const noAuth=await mf.dispatchFetch('https://preview.test/api/data/service_entries');assert.equal(noAuth.status,401);
+ const mobile=await mf.dispatchFetch(origin+'/api/mobile/data/service_entries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...record,pco_plan_id:'d1-native-mobile'})});assert.equal(mobile.status,200);
+ assert.equal((await call('service_entries')).body.data[0].pco_plan_id,'d1-native-mobile');
+ assert.equal((await mf.dispatchFetch('https://preview.test/api/mobile/data/service_entries')).status,401);
+ assert.equal((await mf.dispatchFetch(origin+'/api/mobile/status')).status,200);
  const email=await mf.dispatchFetch(origin+'/api/send-report-email',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:'{}'});assert.equal(email.status,403);
  assert.equal((await call('email_log')).status,200);
  for(const path of ['dist/exports','dist/node_modules','dist/migrations','dist/lib','dist/docs/D1-MIGRATION.md'])assert.equal(existsSync(path),false,'private file in static output: '+path);
