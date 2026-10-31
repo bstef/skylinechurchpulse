@@ -12,7 +12,8 @@
     "dev": "wrangler pages dev --port 8788",
     "db:local": "wrangler d1 migrations apply DB --local",
     "test:runtime": "wrangler pages functions build --outdir .wrangler/test-bundle && node tests/native-d1.mjs",
-    "test:staging-sync-runtime": "node tests/staging-sync-native.mjs"
+    "test:staging-sync-runtime": "node tests/staging-sync-native.mjs",
+    "test:mobile-signin": "node scripts/mobile-signin-test.mjs"
   },
   "repository": {
     "type": "git",

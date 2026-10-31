@@ -81,12 +81,32 @@ This is safe only because `authorizeMobile()` verifies every request on this pat
 3. Confirm the browser site still works and still asks for sign-in.
 4. For production, repeat Parts 1–3 with a new OIDC application, a bypass on `skylinechurch.tech` with path `api/mobile/*`, and `ACCESS_MOBILE_CLIENT_ID` under the top-level `vars`.
 
-### Confirm during staging setup
+### Confirmed on staging (October 31, 2026)
 
-Cloudflare's docs confirm the issuer (`https://<team>.cloudflareaccess.com/cdn-cgi/access/sso/oidc/<client id>`) and key endpoint (`.../jwks`) that `authorizeMobile()` uses. Two details are still unconfirmed:
+The staging application's public discovery document (`<issuer>/.well-known/openid-configuration`) matches what `authorizeMobile()` expects:
 
-- **Custom-scheme redirect.** Check that **Redirect URLs** accepts `skylinepulse://auth`. If it requires `https`, the app will use an `https://skylinechurch.tech/...` app link instead.
-- **Signing algorithm.** Access session tokens are RS256. If the OIDC ID token uses another algorithm, update `verifyAccessToken()` and its tests.
+| Discovery field | Value |
+|---|---|
+| `issuer` | `https://peacockengr.cloudflareaccess.com/cdn-cgi/access/sso/oidc/<client id>` |
+| `jwks_uri` | `<issuer>/jwks` |
+| `id_token_signing_alg_values_supported` | `RS256` |
+| `grant_types_supported` | `authorization_code_with_pkce` |
+| `token_endpoint_auth_methods` | includes `none` (public client, no secret) |
+
+A private window also confirmed that `/api/mobile/status` reaches the API and returns `401`, while `/api/status` still shows the Access login page.
+
+Still to confirm: whether **Redirect URLs** accepts the custom scheme `skylinepulse://auth`. If it requires `https`, the app will use an `https://skylinechurch.tech/...` app link instead.
+
+### Real sign-in test
+
+`scripts/mobile-signin-test.mjs` checks the whole flow from your own computer, before the phone app exists:
+
+1. In the **staging** OIDC application, add `http://localhost:8790/callback` to **Redirect URLs**. Never add it to the production application.
+2. Run `npm run test:mobile-signin`. To test a different preview, pass its URL: `npm run test:mobile-signin -- https://<preview host>`.
+3. Sign in on the Cloudflare page that opens in your browser.
+4. The script prints the token's algorithm, issuer, audience and email (never the token itself). It then calls `/api/mobile/status` without and with the token. **PASS** means `401` without the token and `200` with it.
+
+Remove the localhost redirect URL once testing is finished.
 
 ## Local development
 
