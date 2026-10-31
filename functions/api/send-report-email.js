@@ -23,7 +23,13 @@ async function logEmailSend(db, details) {
   return logEmail(db, { kind: "report", ...details });
 }
 
-export async function onRequestPost(context) {
+export function onRequestPost(context) {
+  return sendReport(context, { requireSameOrigin: true });
+}
+
+// The mobile route authenticates with a bearer token instead of a cookie,
+// so it has no browser origin to check.
+export async function sendReport(context, { requireSameOrigin }) {
   const { RESEND_API_KEY, DB } = context.env;
   if (context.env.EMAIL_ENABLED !== "true" || context.env.CF_PAGES_BRANCH !== "main") {
     return json({ error: "Email sending is disabled in this environment." }, 403);
@@ -31,7 +37,7 @@ export async function onRequestPost(context) {
   if (!RESEND_API_KEY || !DB) {
     return json({ error: "Email isn't configured yet (missing RESEND_API_KEY or database binding)." }, 500);
   }
-  if (!isAllowedOrigin(context.request)) {
+  if (requireSameOrigin && !isAllowedOrigin(context.request)) {
     return json({ error: "Forbidden" }, 403);
   }
 
