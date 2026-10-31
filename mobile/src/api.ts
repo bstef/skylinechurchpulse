@@ -26,7 +26,8 @@ export function createApi({ baseUrl, getToken, onUnauthorized, fetchImpl = fetch
     } catch { return { data: null, error: OFFLINE }; }
     if (response.status === 401) { onUnauthorized?.(); return { data: null, error: SIGNED_OUT }; }
     if (!response.headers.get('Content-Type')?.includes('application/json')) return { data: null, error: OFFLINE };
-    const body = await response.json();
+    let body;
+    try { body = await response.json(); } catch { return { data: null, error: OFFLINE }; }
     if (!response.ok) return { data: null, error: body.error ?? { message: 'Request failed.' } };
     return { data: body, error: null };
   }

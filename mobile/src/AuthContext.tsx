@@ -50,6 +50,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const update = useCallback(async (next: Session | null) => {
     sessionRef.current = next;
+    // A refresh started for an earlier session must not be shared with the new one.
+    refreshing.current = null;
     setSession(next);
     setStatus(next ? 'signed-in' : 'signed-out');
     await save(next).catch(() => {});
@@ -68,20 +70,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Returns a usable ID token, refreshing it once if needed; concurrent callers share one refresh.
+  // A refresh only applies its result if the session it started from is still current, so
+  // signing out (or in as someone else) while it is in flight can't be undone by it.
   const getToken = useCallback(async (): Promise<string | null> => {
     const current = sessionRef.current;
     const step = nextStep(current);
     if (step === 'use') return current!.idToken;
     if (step === 'sign-in') { if (current) await update(null); return null; }
-    refreshing.current ??= AuthSession.refreshAsync({ clientId: config.clientId, refreshToken: current!.refreshToken! }, discovery)
+    const stillCurrent = () => sessionRef.current === current;
+    const refresh: Promise<string | null> = refreshing.current ?? AuthSession.refreshAsync({ clientId: config.clientId, refreshToken: current!.refreshToken! }, discovery)
       .then(async tokens => {
         if (!tokens.idToken) throw new Error('No ID token in refresh response');
+        if (!stillCurrent()) return null;
         await update({ idToken: tokens.idToken, refreshToken: tokens.refreshToken ?? current!.refreshToken });
         return tokens.idToken;
       })
-      .catch(async () => { await update(null); return null; })
-      .finally(() => { refreshing.current = null; });
-    return refreshing.current;
+      .catch(async () => { if (stillCurrent()) await update(null); return null; })
+      .finally(() => { if (refreshing.current === refresh) refreshing.current = null; });
+    refreshing.current = refresh;
+    return refresh;
   }, [update]);
 
   const signIn = useCallback(async () => {

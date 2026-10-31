@@ -49,4 +49,6 @@ test('network failures and non-JSON replies become a connection error', async ()
   assert.match((await offline.api.status()).error!.message, /Unable to connect/);
   const html = harness([new Response('<html>login</html>', { headers: { 'Content-Type': 'text/html' } })]);
   assert.match((await html.api.list('service_entries')).error!.message, /Unable to connect/);
+  const truncated = harness([new Response('{"data":', { headers: { 'Content-Type': 'application/json' } })]);
+  assert.match((await truncated.api.list('service_entries')).error!.message, /Unable to connect/);
 });
