@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { generateKeyPair, exportJWK, SignJWT } from 'jose';
 import { onRequest as middleware } from '../functions/api/_middleware.js';
 import * as browserData from '../functions/api/data/[[path]].js';
@@ -97,4 +97,10 @@ test('only the browser report route requires a same-origin request',async()=>{
     assert.equal(sends,1);
     assert.equal((await mobileReport({request:request(),env:{...reportEnv,EMAIL_ENABLED:'false'}})).status,403);
   } finally {globalThis.fetch=realFetch;}
+});
+test('preview and production never share a mobile sign-in application',()=>{
+  const config=JSON.parse(readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8'));
+  const production=config.vars.ACCESS_MOBILE_CLIENT_ID,preview=config.env.preview.vars.ACCESS_MOBILE_CLIENT_ID;
+  assert.ok(!production||production!==preview);
+  for(const id of [production,preview].filter(Boolean))assert.match(id,/^[A-Za-z0-9_-]{1,128}$/);
 });
