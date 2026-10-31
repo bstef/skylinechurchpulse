@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Skyline Pulse",
+    "slug": "skyline-pulse",
+    "version": "0.1.0",
+    "scheme": "skylinepulse",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "tech.skylinechurch.pulse",
+      "supportsTablet": true,
+      "config": { "usesNonExemptEncryption": false }
+    },
+    "android": {
+      "package": "tech.skylinechurch.pulse",
+      "adaptiveIcon": { "foregroundImage": "./assets/adaptive-icon.png", "backgroundColor": "#FFFFFF" }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-web-browser",
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "backgroundColor": "#F6F3EC",
+          "dark": { "image": "./assets/splash-icon.png", "backgroundColor": "#1C1E21" }
+        }
+      ]
+    ],
+    "experiments": { "typedRoutes": true }
+  }
+}

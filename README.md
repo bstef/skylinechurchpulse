@@ -13,7 +13,7 @@ Skyline Pulse brings service attendance, worship and engagement feedback, produc
 
 The live app is protected by **Cloudflare Access**. Production has used **Cloudflare D1** since October 22, 2026; Supabase is retained read-only for migration recovery.
 
-[Features](#features) · [Local development](#local-development) · [Deployment](#deployment) · [Scheduled jobs](#scheduled-jobs) · [Monitoring](#monitoring) · [Data and recovery](#data-and-recovery)
+[Features](#features) · [Local development](#local-development) · [Deployment](#deployment) · [Scheduled jobs](#scheduled-jobs) · [Monitoring](#monitoring) · [Data and recovery](#data-and-recovery) · [Mobile app](#mobile-app)
 
 ## Features
 
@@ -219,3 +219,7 @@ tests/                      Automated checks and native D1 exercises
 scripts/                    Static build and migration preparation
 docs/                       Project page, user guide, and operating notes
 ```
+
+## Mobile app
+
+The iOS and Android app lives in [`mobile/`](mobile/README.md) and is built with Expo. It signs in through a separate Access for SaaS (OIDC) application and calls the bearer-token routes under `/api/mobile/*` (see [mobile API](docs/MOBILE-API.md)). It has its own dependencies and tests (`cd mobile && npm ci && npm test`) and is not part of the Pages build.
