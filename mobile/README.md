@@ -10,7 +10,7 @@ The iOS and Android app for Skyline Pulse, built with [Expo](https://expo.dev) (
 | Navigation | Tabs: Home, Services, Production, Calendar, More |
 | Themes | Light, Dark and Ocean, matching the website. The app follows the phone's setting until you pick one. |
 | Data | Home shows counts. Services and Production list the latest 20 entries (read-only). |
-| Coming next | Logging and editing (phase 3), Calendar and Planning Center (phase 4), Analytics and Exports (phase 5), push notifications (phase 6) |
+| Coming next | See the [mobile roadmap](../docs/MOBILE-ROADMAP.md) for every phase and what's left |
 
 | Path | Purpose |
 |---|---|
