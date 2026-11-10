@@ -4,7 +4,7 @@ This is the plan for the native iOS and Android apps for Skyline Pulse, with wha
 
 **Approach:** a React Native app built with Expo (one codebase for both platforms) that uses the existing Cloudflare Pages API and D1 database. The website and backend stay the same. See [`mobile/README.md`](../mobile/README.md) for running the app and [MOBILE-API.md](MOBILE-API.md) for how it signs in.
 
-**Last updated:** October 31, 2026
+**Last updated:** November 10, 2026
 
 ## Overview
 
@@ -13,8 +13,8 @@ This is the plan for the native iOS and Android apps for Skyline Pulse, with wha
 | 0 | Accounts and setup | ⏳ To do | Church admin | 1–2 wks |
 | 1 | Backend sign-in for the app | ✅ Merged, one check left | Claude, admin for Cloudflare | 2–3 wks |
 | 2 | App foundation | ✅ Merged, not yet run on a phone | Claude | 2 wks |
-| 3 | Logging and editing | ⏭️ Next | Claude | 4–5 wks |
-| 4 | Calendar and Planning Center | ⬜ Not started | Claude | 3 wks |
+| 3 | Logging and editing | ✅ Built, not yet run on a phone | Claude | 4–5 wks |
+| 4 | Calendar and Planning Center | ⏭️ Next | Claude | 3 wks |
 | 5 | Analytics and exports | ⬜ Not started | Claude | 3–4 wks |
 | 6 | Native extras | ⬜ Not started | Claude, admin for assets | 2 wks |
 | 7 | Beta testing | ⬜ Not started | Team | 2–3 wks |
@@ -72,14 +72,24 @@ Native apps can't use the Cloudflare Access cookie the website relies on. The ap
   - [ ] The chosen theme survives a restart
   - [ ] Sign out returns to the sign-in screen
 
-## Phase 3: Logging and editing ⏭️
+## Phase 3: Logging and editing ✅
 
-- [ ] Sunday Services form: date, service type, attendance (with the Planning Center prefill), unity, engagement, sound, flow, host feedback, notes
-- [ ] Production form: role coverage and names, slides grade, missed cues, feedback
-- [ ] SkyYouth view and form
-- [ ] Edit and delete existing entries, using the same validation messages as the website (duplicates, out-of-range values)
-- [ ] Save drafts on the device so a lost connection doesn't lose a half-filled form
-- [ ] Planning Center plan picker for prefill (`/api/mobile/pco-plans`)
+| Done | Where |
+|---|---|
+| Sunday Services form with every website field, default and validation message, plus whole-number checks the server enforces | `mobile/app/service-form.tsx` |
+| Planning Center plans in the Services tab with the website's statuses (Upcoming, Needs details, Logged, + Log another). Tapping a plan prefills date, service and Check-Ins attendance, and shows when attendance is overridden | `mobile/src/lists.tsx` |
+| "Load older services" back to 120 days, as on the website | `mobile/src/lists.tsx` |
+| Production form: role attendance and names, slides grade, missed cues, camera direction | `mobile/app/production-form.tsx` |
+| SkyYouth screen with its own plans and entries, opened from Home | `mobile/app/skyyouth.tsx` |
+| Edit and delete from any entry, with a confirmation before deleting | Both forms |
+| Duplicate entries explained in context, for example "You've already logged '9:30 AM' for this Planning Center plan" | `mobile/src/logging.ts` |
+| Drafts saved on the phone while you type and restored after a lost connection or a closed app (dropped after 7 days, with a Discard button) | `mobile/src/drafts.ts` |
+| Earlier names offered as you type in "Logged by", "Host" and role names; your own name remembered, as on the website | `mobile/src/form.tsx` |
+| Home shows how many Planning Center plans still need details | `mobile/app/(tabs)/index.tsx` |
+| Tests: service types, aliases, roles and slide grades are read from the website and must match; every payload the forms build must pass the server's own `validatePayload` | `mobile/tests/logging.test.ts` |
+
+**Left to do**
+- [ ] Try it on a phone: log a service from a Planning Center plan, log one by hand, edit and delete each, log production, and check a draft survives closing the app mid-form.
 
 ## Phase 4: Calendar and Planning Center ⬜
 

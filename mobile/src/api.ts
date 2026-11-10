@@ -28,7 +28,8 @@ export function createApi({ baseUrl, getToken, onUnauthorized, fetchImpl = fetch
     if (!response.headers.get('Content-Type')?.includes('application/json')) return { data: null, error: OFFLINE };
     let body;
     try { body = await response.json(); } catch { return { data: null, error: OFFLINE }; }
-    if (!response.ok) return { data: null, error: body.error ?? { message: 'Request failed.' } };
+    // Data routes send { error: { message } }; the Planning Center proxies send { error: "text" }.
+    if (!response.ok) return { data: null, error: typeof body.error === 'string' ? { message: body.error } : body.error ?? { message: 'Request failed.' } };
     return { data: body, error: null };
   }
 
@@ -59,6 +60,10 @@ export function createApi({ baseUrl, getToken, onUnauthorized, fetchImpl = fetch
     async remove(table: Table, id: string) {
       const result = await send(tablePath(table, id), { method: 'DELETE' });
       return { data: result.data?.data ?? null, error: result.error };
+    },
+    // Planning Center plans from daysPast days ago to 45 days ahead (the server clamps daysPast to 14–120).
+    plans<P = Record<string, unknown>>(daysPast?: number): Promise<ApiResult<{ plans: P[]; warnings: Array<{ source?: string; status?: number }>; days_past: number; days_past_max: number }>> {
+      return send('/pco-plans' + (daysPast ? `?days_past=${daysPast}` : ''));
     },
     status(): Promise<ApiResult<{ database: string; preview: boolean; emailEnabled: boolean; planningCenterConfigured: boolean }>> {
       return send('/status');

@@ -1,28 +1,21 @@
 import { RefreshControl } from 'react-native';
-import { useTable, type ProductionEntry } from '../../src/useTable.ts';
+import { router } from 'expo-router';
+import { useData } from '../../src/DataContext.tsx';
 import { useTheme } from '../../src/ThemeContext.tsx';
-import { Banner, Body, Card, Heading, Screen } from '../../src/ui.tsx';
+import { ProductionEntryCard } from '../../src/lists.tsx';
+import { Banner, Body, Button, Screen } from '../../src/ui.tsx';
 
 const RECENT = 20;
-const ROLES = ['lights', 'camera', 'director', 'computer', 'audio'] as const;
 
-// Read-only for now; logging production arrives in phase 3.
 export default function Production() {
   const { colors } = useTheme();
-  const { rows, error, loading, refresh } = useTable<ProductionEntry>('production_entries');
+  const { production, refreshAll } = useData();
   return (
-    <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.brass} />}>
-      {error ? <Banner>{error}</Banner> : null}
-      {!loading && !error && rows.length === 0 ? <Body muted>No production entries logged yet.</Body> : null}
-      {rows.slice(0, RECENT).map(entry => {
-        const covered = ROLES.filter(role => entry[`${role}_present`]).length;
-        return (
-          <Card key={entry.id}>
-            <Heading>{entry.service_date} · {entry.service_type}</Heading>
-            <Body>Roles covered {covered}/{ROLES.length} · Slides {entry.slides_grade}/4 · {entry.slides_miss_count} missed cues</Body>
-          </Card>
-        );
-      })}
+    <Screen refreshControl={<RefreshControl refreshing={production.loading} onRefresh={refreshAll} tintColor={colors.brass} />}>
+      <Button label="Log production" onPress={() => router.push('/production-form')} />
+      {production.error ? <Banner>{production.error}</Banner> : null}
+      {!production.loading && !production.error && production.rows.length === 0 ? <Body muted>No production entries logged yet.</Body> : null}
+      {production.rows.slice(0, RECENT).map(entry => <ProductionEntryCard key={entry.id} entry={entry} />)}
     </Screen>
   );
 }

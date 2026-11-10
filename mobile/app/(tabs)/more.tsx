@@ -30,7 +30,7 @@ export default function More() {
       </Card>
       <Card>
         <Heading>Coming soon</Heading>
-        <Body muted>SkyYouth, Planning Center responses, Analytics and Exports are on the website for now and arrive in the app in later phases.</Body>
+        <Body muted>Calendar, Planning Center responses, Analytics and Exports are on the website for now and arrive in the app in later phases.</Body>
       </Card>
       <Card>
         <Heading>Account</Heading>

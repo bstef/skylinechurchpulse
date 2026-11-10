@@ -52,3 +52,10 @@ test('network failures and non-JSON replies become a connection error', async ()
   const truncated = harness([new Response('{"data":', { headers: { 'Content-Type': 'application/json' } })]);
   assert.match((await truncated.api.list('service_entries')).error!.message, /Unable to connect/);
 });
+test('Planning Center plans load from the mobile route, and its text errors become messages', async () => {
+  const ok = harness([Response.json({ plans: [{ id: 'p' }], warnings: [], days_past: 28, days_past_max: 120 })]);
+  assert.deepEqual((await ok.api.plans(28)).data?.plans, [{ id: 'p' }]);
+  assert.equal(ok.calls[0].url, 'https://pulse.test/api/mobile/pco-plans?days_past=28');
+  const failed = harness([Response.json({ error: 'PCO credentials not configured' }, { status: 500 })]);
+  assert.deepEqual((await failed.api.plans()).error, { message: 'PCO credentials not configured' });
+});

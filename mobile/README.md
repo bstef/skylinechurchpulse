@@ -2,20 +2,23 @@
 
 The iOS and Android app for Skyline Pulse, built with [Expo](https://expo.dev) (SDK 58, React Native, Expo Router). It talks to the same Cloudflare Pages API as the website, through the bearer-token routes under `/api/mobile/*` described in [docs/MOBILE-API.md](../docs/MOBILE-API.md).
 
-## What's here (phase 2)
+## What's here (phases 2–3)
 
 | Area | Status |
 |---|---|
 | Sign-in | Cloudflare Access OIDC with PKCE in the phone's system browser. Tokens are kept in the device's secure storage (Keychain / Keystore) and refreshed when the server issues a refresh token. |
-| Navigation | Tabs: Home, Services, Production, Calendar, More |
+| Navigation | Tabs: Home, Services, Production, Calendar, More, plus a SkyYouth screen opened from Home |
 | Themes | Light, Dark and Ocean, matching the website. The app follows the phone's setting until you pick one. |
-| Data | Home shows counts. Services and Production list the latest 20 entries (read-only). |
+| Logging | Log, edit and delete Sunday Services, SkyYouth and Production entries, with the website's fields, defaults and validation. Planning Center plans show what still needs details and prefill the form. Unsaved forms are kept as drafts on the phone. |
 | Coming next | See the [mobile roadmap](../docs/MOBILE-ROADMAP.md) for every phase and what's left |
 
 | Path | Purpose |
 |---|---|
 | `app/` | Screens (Expo Router file-based routes) |
 | `src/api.ts` | API client, a port of `../assets/data-client.js` |
+| `src/logging.ts` | Form defaults, validation, payloads and Planning Center matching, ported from the website |
+| `src/DataContext.tsx` | Shared cache of entries and plans, reloaded after every save |
+| `src/drafts.ts`, `src/useDraftForm.ts` | Unsaved form drafts on the device |
 | `src/session.ts` | Token expiry and refresh rules |
 | `src/AuthContext.tsx` | Sign-in, secure token storage, refresh |
 | `src/theme.ts` | Theme colours, kept identical to the website by `tests/theme.test.ts` |
@@ -28,7 +31,7 @@ Use Node.js 22 or newer.
 ```sh
 cd mobile
 npm ci
-npm test            # unit tests (API client, sessions, themes)
+npm test            # unit tests (API client, sessions, themes, logging rules, drafts)
 npm run typecheck
 ```
 
