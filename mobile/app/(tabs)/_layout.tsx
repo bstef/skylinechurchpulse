@@ -16,6 +16,8 @@ export default function TabsLayout() {
       tabBarActiveTintColor: colors.brass,
       tabBarInactiveTintColor: colors.muted,
       sceneStyle: { backgroundColor: colors.paper },
+      // A small slide and fade toward the tab you tapped: enough to feel like movement, not a full page push.
+      animation: 'shift',
     }}>
       <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: icon('🏠') }} />
       <Tabs.Screen name="services" options={{ title: 'Services', tabBarIcon: icon('🗓️') }} />
