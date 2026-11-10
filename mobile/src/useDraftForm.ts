@@ -12,6 +12,8 @@ export function useDraftForm<T extends object>(key: string, initial: T | null) {
   const [restored, setRestored] = useState(false);
   const loadedKey = useRef<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The latest edit not yet written, so closing the form right after typing doesn't lose it.
+  const pending = useRef<T | null>(null);
 
   useEffect(() => {
     // Wait for the entry or plan to load, and load each form's draft only once.
@@ -23,20 +25,27 @@ export function useDraftForm<T extends object>(key: string, initial: T | null) {
     });
   }, [key, initial]);
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+    if (pending.current) drafts.save(key, pending.current);
+    pending.current = null;
+  }, [key]);
 
   const update = useCallback((patch: Partial<T>) => {
     setValues(current => {
       if (!current) return current;
       const next = { ...current, ...patch };
       if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => { drafts.save(key, next); }, SAVE_DELAY_MS);
+      pending.current = next;
+      timer.current = setTimeout(() => { pending.current = null; drafts.save(key, next); }, SAVE_DELAY_MS);
       return next;
     });
   }, [key]);
 
+  // Saving or discarding drops any pending edit too, so closing afterwards can't recreate the draft.
   const forget = useCallback(async () => {
     if (timer.current) clearTimeout(timer.current);
+    pending.current = null;
     await drafts.clear(key);
   }, [key]);
 
