@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from './AuthContext.tsx';
 import { saveErrorMessage, type PcoPlan, type ProductionEntry, type ServiceEntry } from './logging.ts';
 
@@ -31,17 +31,25 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [production, setProduction] = useState<Loadable<ProductionEntry>>(empty);
   const [plans, setPlans] = useState<PlansState>({ ...empty<PcoPlan>(), daysPast: PLANS_DAYS_PAST, daysPastMax: 120, checkinsUnavailable: false });
 
+  // Bumped on every sign-in and sign-out; a load that finishes under an older value is ignored,
+  // so a reply that arrives after signing out can't refill the cleared cache.
+  const session = useRef(0);
+
   const loadTable = useCallback(async (table: Table) => {
     const set = (table === 'service_entries' ? setServices : setProduction) as (update: (s: Loadable<any>) => Loadable<any>) => void;
     set(state => ({ ...state, loading: true }));
+    const generation = session.current;
     const result = await api.list(table);
+    if (generation !== session.current) return;
     // Keep the rows already shown if a reload fails, and say why.
     set(state => ({ rows: result.data ?? state.rows, loading: false, error: result.error?.message ?? null }));
   }, [api]);
 
   const refreshPlans = useCallback(async (daysPast?: number) => {
     setPlans(state => ({ ...state, loading: true }));
+    const generation = session.current;
     const result = await api.plans<PcoPlan>(daysPast ?? PLANS_DAYS_PAST);
+    if (generation !== session.current) return;
     setPlans(state => result.data ? {
       rows: result.data.plans ?? [],
       loading: false,
@@ -58,6 +66,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Load once signed in; forget everything on sign-out so the next person starts clean.
   useEffect(() => {
+    session.current += 1;
     if (!signedIn) {
       setServices(empty());
       setProduction(empty());
