@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as WebBrowser from 'expo-web-browser';
 import { config } from './config.ts';
 import { createApi, type Api } from './api.ts';
-import { decodeClaims, nextStep, parseSession, type Session } from './session.ts';
+import { decodeClaims, nextStep, parseSession, refreshEndsSession, type Session } from './session.ts';
 
 // Closes the sign-in browser tab when Access redirects back to the app.
 WebBrowser.maybeCompleteAuthSession();
@@ -19,6 +19,8 @@ const redirectUri = AuthSession.makeRedirectUri({ scheme: config.scheme, path: c
 type AuthState = {
   status: 'loading' | 'signed-out' | 'signed-in';
   email: string | null;
+  // True when the session came from the phone's storage at launch, false after signing in here.
+  restored: boolean;
   error: string | null;
   busy: boolean;
   signIn: () => Promise<void>;
@@ -32,11 +34,20 @@ async function save(session: Session | null) {
   else await SecureStore.deleteItemAsync(SESSION_KEY);
 }
 
+// Plain-language sign-in errors instead of OAuth codes.
+function signInErrorMessage(error: unknown): string {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (code === 'access_denied') return "That account isn't allowed to use Skyline Pulse. Check you used your church email, or ask an admin for access.";
+  if (error instanceof TypeError || /network/i.test(String((error as Error | null)?.message))) return "Couldn't reach the sign-in service. Check your connection and try again.";
+  return 'Sign-in didn\'t finish. Please try again.';
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState<AuthState['status']>('loading');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [restored, setRestored] = useState(false);
   const sessionRef = useRef<Session | null>(null);
   const refreshing = useRef<Promise<string | null> | null>(null);
 
@@ -64,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const step = nextStep(stored);
         sessionRef.current = step === 'sign-in' ? null : stored;
         setSession(sessionRef.current);
+        setRestored(!!sessionRef.current);
         setStatus(sessionRef.current ? 'signed-in' : 'signed-out');
       })
       .catch(() => setStatus('signed-out'));
@@ -85,7 +97,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await update({ idToken: tokens.idToken, refreshToken: tokens.refreshToken ?? current!.refreshToken });
         return tokens.idToken;
       })
-      .catch(async () => { if (stillCurrent()) await update(null); return null; })
+      .catch(async caught => {
+        if (!stillCurrent()) return null;
+        if (refreshEndsSession(caught)) { await update(null); return null; }
+        // Temporary trouble (no signal): keep the session and let this request fail as offline.
+        throw caught;
+      })
       .finally(() => { if (refreshing.current === refresh) refreshing.current = null; });
     refreshing.current = refresh;
     return refresh;
@@ -98,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const result = await promptAsync();
       if (result.type !== 'success') {
-        if (result.type === 'error') setError(result.error?.message || 'Sign-in failed. Try again.');
+        if (result.type === 'error') setError(signInErrorMessage(result.error));
         return;
       }
       const tokens = await AuthSession.exchangeCodeAsync({
@@ -108,9 +125,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         extraParams: { code_verifier: request.codeVerifier ?? '' },
       }, discovery);
       if (!tokens.idToken) throw new Error('Sign-in did not return an ID token.');
+      setRestored(false);
       await update({ idToken: tokens.idToken, refreshToken: tokens.refreshToken ?? null });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Sign-in failed. Try again.');
+      setError(signInErrorMessage(caught));
     } finally {
       setBusy(false);
     }
@@ -121,8 +139,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const api = useMemo(() => createApi({ baseUrl: config.apiBase, getToken, onUnauthorized: () => { update(null); } }), [getToken, update]);
   const email = session ? (decodeClaims(session.idToken)?.email as string | undefined) ?? null : null;
 
-  const value = useMemo<AuthState>(() => ({ status, email, error, busy: busy || !request, signIn, signOut, api }),
-    [status, email, error, busy, request, signIn, signOut, api]);
+  const value = useMemo<AuthState>(() => ({ status, email, restored, error, busy: busy || !request, signIn, signOut, api }),
+    [status, email, restored, error, busy, request, signIn, signOut, api]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

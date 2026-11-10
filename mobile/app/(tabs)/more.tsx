@@ -1,13 +1,18 @@
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../../src/AuthContext.tsx';
+import { useLock } from '../../src/LockContext.tsx';
 import { useTheme } from '../../src/ThemeContext.tsx';
 import { config } from '../../src/config.ts';
 import { THEME_LABELS, THEMES } from '../../src/theme.ts';
-import { Body, Button, Card, Heading, Screen } from '../../src/ui.tsx';
+import { Chips } from '../../src/form.tsx';
+import { Banner, Body, Button, Card, Heading, Screen } from '../../src/ui.tsx';
 
 export default function More() {
   const { theme, colors, setTheme } = useTheme();
   const { email, signOut } = useAuth();
+  const lock = useLock();
+  const [lockError, setLockError] = useState<string | null>(null);
   return (
     <Screen>
       <Card>
@@ -27,6 +32,18 @@ export default function More() {
             );
           })}
         </View>
+      </Card>
+      <Card>
+        <Heading>Security</Heading>
+        {lock.available ? (
+          <>
+            <Body>Require {lock.label} to open the app</Body>
+            <Chips options={[{ value: true, label: 'On' }, { value: false, label: 'Off' }]} value={lock.enabled}
+              onChange={async next => setLockError(await lock.setEnabled(next))} accessibilityLabel={`Require ${lock.label}`} />
+            <Body muted>Asked when you open the app and after 5 minutes away. You stay signed in either way.</Body>
+            {lockError ? <Banner>{lockError}</Banner> : null}
+          </>
+        ) : <Body muted>Set up Face ID, Touch ID or a passcode in your phone's Settings to lock the app.</Body>}
       </Card>
       <Card>
         <Heading>Coming soon</Heading>

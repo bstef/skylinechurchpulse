@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { createApi } from '../src/api.ts';
 
 type Call = { url: string; init: RequestInit };
-function harness(responses: Array<Response | Error>, token: string | null = 'id-token') {
+function harness(responses: Array<Response | Error>, token: string | null | Error = 'id-token') {
   const calls: Call[] = [];
   let signedOut = 0;
   const api = createApi({
     baseUrl: 'https://pulse.test/',
-    getToken: async () => token,
+    getToken: async () => { if (token instanceof Error) throw token; return token; },
     onUnauthorized: () => { signedOut++; },
     fetchImpl: (async (url: string, init: RequestInit) => {
       calls.push({ url, init });
@@ -58,4 +58,10 @@ test('Planning Center plans load from the mobile route, and its text errors beco
   assert.equal(ok.calls[0].url, 'https://pulse.test/api/mobile/pco-plans?days_past=28');
   const failed = harness([Response.json({ error: 'PCO credentials not configured' }, { status: 500 })]);
   assert.deepEqual((await failed.api.plans()).error, { message: 'PCO credentials not configured' });
+});
+test('a sign-in that could not be renewed offline is a connection error, not a sign-out', async () => {
+  const offline = harness([], new Error('Network request failed'));
+  assert.match((await offline.api.list('service_entries')).error!.message, /Unable to connect/);
+  assert.equal(offline.signedOut(), 0);
+  assert.equal(offline.calls.length, 0);
 });

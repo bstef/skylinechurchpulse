@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { decodeClaims, isExpired, nextStep, parseSession } from '../src/session.ts';
+import { decodeClaims, isExpired, nextStep, parseSession, refreshEndsSession } from '../src/session.ts';
 
 const token = (claims: object) => ['e30', Buffer.from(JSON.stringify(claims)).toString('base64url'), 'sig'].join('.');
 const now = Date.UTC(2026, 9, 31, 12);
@@ -27,4 +27,11 @@ test('stored sessions are parsed defensively', () => {
   assert.deepEqual(parseSession('{"idToken":"a.b.c","refreshToken":"r"}'), { idToken: 'a.b.c', refreshToken: 'r' });
   assert.deepEqual(parseSession('{"idToken":"a.b.c"}'), { idToken: 'a.b.c', refreshToken: null });
   for (const raw of [null, '', 'not json', '{"idToken":5}', 'null']) assert.equal(parseSession(raw), null);
+});
+test('only a rejected refresh ends the session; network trouble keeps it', () => {
+  assert.equal(refreshEndsSession({ code: 'invalid_grant', message: 'expired' }), true);
+  assert.equal(refreshEndsSession(new Error('No ID token in refresh response')), true);
+  assert.equal(refreshEndsSession(new TypeError('Network request failed')), false);
+  assert.equal(refreshEndsSession({ code: 'ERR_NETWORK' }), false);
+  assert.equal(refreshEndsSession(undefined), false);
 });

@@ -18,7 +18,10 @@ export function createApi({ baseUrl, getToken, onUnauthorized, fetchImpl = fetch
   const root = baseUrl.replace(/\/$/, '') + '/api/mobile';
 
   async function send(path: string, init: RequestInit = {}): Promise<ApiResult<any>> {
-    const token = await getToken();
+    // getToken throws when it couldn't renew the sign-in for a temporary reason (no signal);
+    // that's a connection problem, not a reason to sign the person out.
+    let token: string | null;
+    try { token = await getToken(); } catch { return { data: null, error: OFFLINE }; }
     if (!token) { onUnauthorized?.(); return { data: null, error: SIGNED_OUT }; }
     let response: Response;
     try {
