@@ -1,26 +1,24 @@
 import { RefreshControl } from 'react-native';
-import { useTable, type ServiceEntry } from '../../src/useTable.ts';
+import { router } from 'expo-router';
+import { useData } from '../../src/DataContext.tsx';
 import { useTheme } from '../../src/ThemeContext.tsx';
-import { Banner, Body, Card, Heading, Screen } from '../../src/ui.tsx';
+import { PlansSection, ServiceEntryCard } from '../../src/lists.tsx';
+import { Banner, Body, Button, Heading, Screen } from '../../src/ui.tsx';
 
 const RECENT = 20;
 
-// Read-only for now; logging and editing services arrive in phase 3.
 export default function Services() {
   const { colors } = useTheme();
-  const { rows, error, loading, refresh } = useTable<ServiceEntry>('service_entries');
-  const recent = rows.filter(entry => entry.service_type !== 'SkyYouth').slice(0, RECENT);
+  const { services, plans, refreshAll } = useData();
+  const recent = services.rows.filter(entry => entry.service_type !== 'SkyYouth').slice(0, RECENT);
   return (
-    <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.brass} />}>
-      {error ? <Banner>{error}</Banner> : null}
-      {!loading && !error && recent.length === 0 ? <Body muted>No services logged yet.</Body> : null}
-      {recent.map(entry => (
-        <Card key={entry.id}>
-          <Heading>{entry.service_date} · {entry.service_type}</Heading>
-          <Body>{entry.attendance} attending · Unity {entry.unity}/5 · Engagement {entry.engagement}/5</Body>
-          {entry.notes ? <Body muted>{entry.notes}</Body> : null}
-        </Card>
-      ))}
+    <Screen refreshControl={<RefreshControl refreshing={services.loading || plans.loading} onRefresh={refreshAll} tintColor={colors.brass} />}>
+      <Button label="Log a service" onPress={() => router.push('/service-form')} />
+      <PlansSection youth={false} />
+      <Heading>Recent entries</Heading>
+      {services.error ? <Banner>{services.error}</Banner> : null}
+      {!services.loading && !services.error && recent.length === 0 ? <Body muted>No services logged yet.</Body> : null}
+      {recent.map(entry => <ServiceEntryCard key={entry.id} entry={entry} />)}
     </Screen>
   );
 }
