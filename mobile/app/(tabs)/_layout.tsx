@@ -19,8 +19,10 @@ export default function TabsLayout() {
     }}>
       <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: icon('🏠') }} />
       <Tabs.Screen name="services" options={{ title: 'Services', tabBarIcon: icon('🗓️') }} />
+      <Tabs.Screen name="skyyouth" options={{ title: 'SkyYouth', tabBarIcon: icon('🎧') }} />
       <Tabs.Screen name="production" options={{ title: 'Production', tabBarIcon: icon('🎛️') }} />
-      <Tabs.Screen name="calendar" options={{ title: 'Calendar', tabBarIcon: icon('📅') }} />
+      {/* Hidden until phase 4 gives it real content; the bar holds five tabs comfortably. */}
+      <Tabs.Screen name="calendar" options={{ title: 'Calendar', href: null }} />
       <Tabs.Screen name="more" options={{ title: 'More', tabBarIcon: icon('⚙️') }} />
     </Tabs>
   );

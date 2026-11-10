@@ -35,7 +35,6 @@ function Navigator() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.paper } }}>
         <Stack.Protected guard={status === 'signed-in'}>
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="skyyouth" options={pushed} />
           <Stack.Screen name="service-form" options={{ ...pushed, presentation: 'modal' }} />
           <Stack.Screen name="production-form" options={{ ...pushed, presentation: 'modal' }} />
         </Stack.Protected>

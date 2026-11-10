@@ -36,7 +36,7 @@ export function PlansSection({ youth }: { youth: boolean }) {
           <Card key={plan.id}>
             <Heading>{plan.sort_date.slice(0, 10)} · {matched || plan.plan_time_name || plan.service_type_name}</Heading>
             <Body muted>{plan.title}{plan.series_title ? ` · ${plan.series_title}` : ''}</Body>
-            {plan.attendance_from_pco != null ? <Body>{plan.attendance_from_pco.toLocaleString()} attending (from Planning Center)</Body> : null}
+            {plan.attendance_from_pco != null && status !== 'upcoming' ? <Body>{plan.attendance_from_pco.toLocaleString()} attending (from Planning Center)</Body> : null}
             <View style={styles.pills}>
               {linked.map(entry => <Pill key={entry.id} label={`${entry.service_type} ✓`} tone="done" onPress={() => router.push({ pathname: '/service-form', params: { id: entry.id } })} />)}
               {status === 'upcoming' ? <Pill label="Upcoming" tone="muted" /> : null}
