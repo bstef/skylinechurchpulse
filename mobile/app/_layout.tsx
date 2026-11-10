@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { Stack } from 'expo-router';
+import { FullWindowOverlay } from 'react-native-screens';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
@@ -26,7 +28,6 @@ function Navigator() {
     if (!loading) SplashScreen.hideAsync().catch(() => {});
   }, [loading]);
   if (loading) return null;
-  if (lock.locked) return <><StatusBar style={isDarkTheme(theme) ? 'light' : 'dark'} /><LockScreen /></>;
   const pushed = { headerShown: true, headerStyle: { backgroundColor: colors.surface }, headerTintColor: colors.ink, headerShadowVisible: false };
 
   return (
@@ -42,6 +43,10 @@ function Navigator() {
           <Stack.Screen name="sign-in" />
         </Stack.Protected>
       </Stack>
+      {/* The lock covers the app rather than replacing it: the router stays mounted, and
+          unlocking returns to the same screen, even part-way through a form. FullWindowOverlay
+          sits above native sheets on iOS too, so an open form can't show over the lock. */}
+      {lock.locked ? <FullWindowOverlay><View style={StyleSheet.absoluteFill}><LockScreen /></View></FullWindowOverlay> : null}
     </>
   );
 }
