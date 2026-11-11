@@ -8,6 +8,7 @@ The iOS and Android app for Skyline Pulse, built with [Expo](https://expo.dev) (
 |---|---|
 | Sign-in | Cloudflare Access OIDC with PKCE in the phone's system browser. Tokens are kept in the device's secure storage (Keychain / Keystore) and refreshed when the server issues a refresh token. |
 | Navigation | Tabs: Home, Services, Production, Calendar, More, plus a SkyYouth screen opened from Home |
+| Home | Matches the website's home page: welcome banner, count tiles, average scores, attendance trend, section cards and Recently Logged |
 | Themes | Light, Dark and Ocean, matching the website. The app follows the phone's setting until you pick one. |
 | Logging | Log, edit and delete Sunday Services, SkyYouth and Production entries, with the website's fields, defaults and validation. Planning Center plans show what still needs details and prefill the form. Unsaved forms are kept as drafts on the phone. |
 | Coming next | See the [mobile roadmap](../docs/MOBILE-ROADMAP.md) for every phase and what's left |
@@ -16,6 +17,7 @@ The iOS and Android app for Skyline Pulse, built with [Expo](https://expo.dev) (
 |---|---|
 | `app/` | Screens (Expo Router file-based routes) |
 | `src/api.ts` | API client, a port of `../assets/data-client.js` |
+| `src/home.ts` | Home page counts, averages, trend and section cards, ported from the website |
 | `src/logging.ts` | Form defaults, validation, payloads and Planning Center matching, ported from the website |
 | `src/DataContext.tsx` | Shared cache of entries and plans, reloaded after every save |
 | `src/drafts.ts`, `src/useDraftForm.ts` | Unsaved form drafts on the device |
