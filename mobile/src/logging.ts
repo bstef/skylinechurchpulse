@@ -32,10 +32,11 @@ export type ServiceEntry = {
   unity: number; engagement: number; loudness_db: number; sound_clarity: boolean; spiritual_response: number;
   transition_clarity: number; lighting_fit: boolean; talking_fit: boolean; announcements_fit: boolean; sermon_fit: boolean;
   host_name: string | null; intro_welcoming: number; notes: string | null; pco_plan_id: string | null; logged_by: string | null;
+  created_at?: string;
 };
 export type ProductionEntry = {
   id: string; service_date: string; service_type: string; slides_grade: number; slides_miss_count: number;
-  camera_direction_fit: boolean; notes: string | null; logged_by: string | null;
+  camera_direction_fit: boolean; notes: string | null; logged_by: string | null; created_at?: string;
 } & { [K in `${RoleKey}_present`]: boolean } & { [K in `${RoleKey}_name`]: string | null };
 export type PcoPlan = {
   id: string; plan_id: string; title: string; series_title?: string | null; sort_date: string;

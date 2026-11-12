@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Skyline Pulse",
-    "slug": "skyline-pulse",
+    "slug": "skyline-church-pulse",
     "version": "0.1.0",
     "scheme": "skylinepulse",
     "orientation": "portrait",
@@ -38,16 +38,21 @@
           }
         }
       ],
-      "@react-native-community/datetimepicker",
-      [
-        "expo-local-authentication",
-        {
-          "faceIDPermission": "Skyline Pulse uses Face ID to keep church data private on this phone."
-        }
-      ]
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "c97f9be5-3273-4ccc-8e7e-1993b8612cd4"
+      }
+    },
+    "owner": "skylinechurch"
   }
 }

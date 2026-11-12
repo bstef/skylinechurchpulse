@@ -18,10 +18,7 @@ export function createApi({ baseUrl, getToken, onUnauthorized, fetchImpl = fetch
   const root = baseUrl.replace(/\/$/, '') + '/api/mobile';
 
   async function send(path: string, init: RequestInit = {}): Promise<ApiResult<any>> {
-    // getToken throws when it couldn't renew the sign-in for a temporary reason (no signal);
-    // that's a connection problem, not a reason to sign the person out.
-    let token: string | null;
-    try { token = await getToken(); } catch { return { data: null, error: OFFLINE }; }
+    const token = await getToken();
     if (!token) { onUnauthorized?.(); return { data: null, error: SIGNED_OUT }; }
     let response: Response;
     try {
@@ -67,6 +64,10 @@ export function createApi({ baseUrl, getToken, onUnauthorized, fetchImpl = fetch
     // Planning Center plans from daysPast days ago to 45 days ahead (the server clamps daysPast to 14–120).
     plans<P = Record<string, unknown>>(daysPast?: number): Promise<ApiResult<{ plans: P[]; warnings: Array<{ source?: string; status?: number }>; days_past: number; days_past_max: number }>> {
       return send('/pco-plans' + (daysPast ? `?days_past=${daysPast}` : ''));
+    },
+    // Planning Center Check-Ins, People and Serving summaries; each section reports its own error.
+    stats<S = Record<string, unknown>>(): Promise<ApiResult<{ serving?: S & { error?: unknown } }>> {
+      return send('/pco-stats');
     },
     status(): Promise<ApiResult<{ database: string; preview: boolean; emailEnabled: boolean; planningCenterConfigured: boolean }>> {
       return send('/status');

@@ -16,15 +16,11 @@ export default function TabsLayout() {
       tabBarActiveTintColor: colors.brass,
       tabBarInactiveTintColor: colors.muted,
       sceneStyle: { backgroundColor: colors.paper },
-      // A small slide and fade toward the tab you tapped: enough to feel like movement, not a full page push.
-      animation: 'shift',
     }}>
-      <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: icon('🏠') }} />
+      <Tabs.Screen name="index" options={{ title: 'Home', headerShown: false, tabBarIcon: icon('🏠') }} />
       <Tabs.Screen name="services" options={{ title: 'Services', tabBarIcon: icon('🗓️') }} />
-      <Tabs.Screen name="skyyouth" options={{ title: 'SkyYouth', tabBarIcon: icon('🎧') }} />
       <Tabs.Screen name="production" options={{ title: 'Production', tabBarIcon: icon('🎛️') }} />
-      {/* Hidden until phase 4 gives it real content; the bar holds five tabs comfortably. */}
-      <Tabs.Screen name="calendar" options={{ title: 'Calendar', href: null }} />
+      <Tabs.Screen name="calendar" options={{ title: 'Calendar', tabBarIcon: icon('📅') }} />
       <Tabs.Screen name="more" options={{ title: 'More', tabBarIcon: icon('⚙️') }} />
     </Tabs>
   );

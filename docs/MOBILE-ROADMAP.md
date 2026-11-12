@@ -4,7 +4,7 @@ This is the plan for the native iOS and Android apps for Skyline Pulse, with wha
 
 **Approach:** a React Native app built with Expo (one codebase for both platforms) that uses the existing Cloudflare Pages API and D1 database. The website and backend stay the same. See [`mobile/README.md`](../mobile/README.md) for running the app and [MOBILE-API.md](MOBILE-API.md) for how it signs in.
 
-**Last updated:** November 10, 2026
+**Last updated:** November 11, 2026
 
 ## Overview
 
@@ -85,27 +85,12 @@ Native apps can't use the Cloudflare Access cookie the website relies on. The ap
 | Duplicate entries explained in context, for example "You've already logged '9:30 AM' for this Planning Center plan" | `mobile/src/logging.ts` |
 | Drafts saved on the phone while you type and restored after a lost connection or a closed app (dropped after 7 days, with a Discard button) | `mobile/src/drafts.ts` |
 | Earlier names offered as you type in "Logged by", "Host" and role names; your own name remembered, as on the website | `mobile/src/form.tsx` |
-| Home shows how many Planning Center plans still need details | `mobile/app/(tabs)/index.tsx` |
+| Home page like the website's: welcome banner, count tiles (including Planning Center serving responses), average scores, attendance trend for the last 8 services, a card for every section, Recently Logged, and a prompt when plans need details | `mobile/app/(tabs)/index.tsx`, `mobile/src/home.ts` |
 | Tests: service types, aliases, roles and slide grades are read from the website and must match; every payload the forms build must pass the server's own `validatePayload` | `mobile/tests/logging.test.ts` |
 
 **Left to do**
 - [ ] Try it on a phone: log a service from a Planning Center plan, log one by hand, edit and delete each, log production, and check a draft survives closing the app mid-form.
-
-## Sign-in improvements 🚧
-
-The email code was the main complaint after the first run on a phone, so it now happens about once a month instead of every time.
-
-| Done | Where |
-|---|---|
-| Face ID / Touch ID lock when opening a saved sign-in and after 5 minutes away, falling back to the phone passcode; a toggle in More that needs Face ID to turn off | `mobile/src/LockContext.tsx`, `mobile/src/lock.ts` |
-| Renewal keeps people signed in; only a rejection from Cloudflare signs them out, and losing signal doesn't | `mobile/src/AuthContext.tsx`, `mobile/src/session.ts` |
-| Sign-in screen that explains the three steps (iOS prompt, email code, back to the app) with plain-language errors | `mobile/app/sign-in.tsx` |
-| `npm run test:mobile-signin` also checks that refresh tokens renew | `scripts/mobile-signin-test.mjs` |
-
-**Left to do**
-- [ ] Cloudflare: refresh token lifetime, global session timeout and instant authentication (see [MOBILE-API.md](MOBILE-API.md), Part 5)
-- [ ] Run `npm run test:mobile-signin` and get **Staying signed in: PASS**
-- [ ] On a phone: sign in, close the app, reopen it and unlock with Face ID; leave it for 5 minutes and check it locks again
+- [ ] Check the Home page on a phone: the counts and averages match the website, the attendance chart shows the last 8 services, and each card and Recently Logged row opens the right screen.
 
 ## Phase 4: Calendar and Planning Center ⬜
 
