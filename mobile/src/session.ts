@@ -36,3 +36,15 @@ export function parseSession(raw: string | null): Session | null {
     return typeof value?.idToken === 'string' ? { idToken: value.idToken, refreshToken: value.refreshToken ?? null } : null;
   } catch { return null; }
 }
+
+// A refresh that Cloudflare rejects (an OAuth error code such as invalid_grant, or a reply
+// without an ID token) means the sign-in is over. Anything else, like no signal in the
+// sanctuary, keeps the session so the next request can try again.
+export function refreshEndsSession(error: unknown): boolean {
+  if (error && typeof error === 'object') {
+    const { code, message } = error as { code?: unknown; message?: unknown };
+    if (typeof code === 'string' && code.length > 0 && code !== 'ERR_NETWORK') return true;
+    if (typeof message === 'string' && /no id token/i.test(message)) return true;
+  }
+  return false;
+}

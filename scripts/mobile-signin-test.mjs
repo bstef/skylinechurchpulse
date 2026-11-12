@@ -58,13 +58,24 @@ async function exchange(code) {
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok || !body.id_token) throw new Error(`Token exchange failed (${response.status}): ${body.error || 'no id_token'} ${body.error_description || ''}`);
-  return body.id_token;
+  return body;
+}
+
+// The app stays signed in by trading the refresh token for a new ID token, as it does here.
+async function refresh(refreshToken) {
+  const response = await fetch(`${ISSUER}/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+    body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: CLIENT_ID }),
+  });
+  const body = await response.json().catch(() => ({}));
+  return { ok: response.ok && !!body.id_token, status: response.status, body };
 }
 
 function describe(token) {
   const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
   const header = JSON.parse(Buffer.from(token.split('.')[0], 'base64url').toString());
-  return { alg: header.alg, iss: claims.iss, aud: claims.aud, email: claims.email, expires: new Date(claims.exp * 1000).toISOString() };
+  return { alg: header.alg, iss: claims.iss, aud: claims.aud, email: claims.email, expires: new Date(claims.exp * 1000).toISOString(), lifetimeMinutes: Math.round((claims.exp - claims.iat) / 60) };
 }
 
 async function status(headers = {}) {
@@ -79,7 +90,8 @@ try {
   const pending = waitForCode();
   console.log(`Opening the Cloudflare sign-in page. If no browser opens, visit:\n${authorize}\n`);
   openBrowser(authorize.href);
-  const token = await exchange(await pending);
+  const tokens = await exchange(await pending);
+  const token = tokens.id_token;
   console.log('ID token received:', describe(token));
   const without = await status();
   console.log(`\nWithout a token:  ${without.status} ${without.body}`);
@@ -87,7 +99,19 @@ try {
   console.log(`With the token:   ${withToken.status} ${withToken.body}`);
   const passed = without.status === 401 && withToken.status === 200;
   console.log(passed ? '\nPASS: mobile sign-in works end to end.' : '\nFAIL: expected 401 without a token and 200 with it.');
-  process.exitCode = passed ? 0 : 1;
+  if (!tokens.refresh_token) {
+    console.log('\nStaying signed in: NOT YET. No refresh token was issued, so the app will ask for a new email code when this ID token expires.');
+    console.log('Turn on "Refresh token lifetime" in the staging SaaS app\'s Advanced settings (see docs/MOBILE-API.md), then run this again.');
+  } else {
+    const renewed = await refresh(tokens.refresh_token);
+    const again = renewed.ok ? await status({ Authorization: `Bearer ${renewed.body.id_token}` }) : null;
+    const staysSignedIn = renewed.ok && again.status === 200;
+    console.log(staysSignedIn
+      ? `\nStaying signed in: PASS. The refresh token renewed the sign-in without a new code (new ID token lasts ${describe(renewed.body.id_token).lifetimeMinutes} min) and the API accepted it.`
+      : `\nStaying signed in: FAIL. Refresh returned ${renewed.status} ${renewed.body.error || ''}${again ? `; API said ${again.status}` : ''}.`);
+    if (!staysSignedIn) process.exitCode = 1;
+  }
+  if (!passed) process.exitCode = 1;
 } catch (error) {
   console.error('\nFAIL:', error.message);
   process.exitCode = 1;

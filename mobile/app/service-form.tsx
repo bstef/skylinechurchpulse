@@ -13,7 +13,8 @@ import {
 
 // Log a service (optionally for a Planning Center plan via ?planId=) or edit one (?id=).
 export default function ServiceFormScreen() {
-  const { id, planId } = useLocalSearchParams<{ id?: string; planId?: string }>();
+  // ?service= preselects the service for a manual entry, e.g. from the SkyYouth tab.
+  const { id, planId, service } = useLocalSearchParams<{ id?: string; planId?: string; service?: string }>();
   const { services, plans, save, remove } = useData();
   const entry = id ? services.rows.find(e => e.id === id) ?? null : null;
   const plan = !id && planId ? plans.rows.find(p => p.id === planId) ?? null : null;
@@ -27,7 +28,12 @@ export default function ServiceFormScreen() {
 
   // Wait until the entry or plan this form is for has loaded.
   const ready = savedLoggedBy !== null && (!id || entry) && (!planId || id || plan);
-  const initial = useMemo(() => ready ? serviceDefaults(context, savedLoggedBy!, today) : null, [ready, context, savedLoggedBy, today]);
+  const initial = useMemo(() => {
+    if (!ready) return null;
+    const defaults = serviceDefaults(context, savedLoggedBy!, today);
+    if (!id && !planId && (SERVICE_TYPES as readonly string[]).includes(service ?? '')) defaults.service = service!;
+    return defaults;
+  }, [ready, context, savedLoggedBy, today, id, planId, service]);
   const { values: form, update, restored, discard, forget } = useDraftForm<ServiceForm>(draftKey('service', { entryId: id, planId }), initial);
 
   const editing = !!entry;

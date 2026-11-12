@@ -81,6 +81,19 @@ This is safe only because `authorizeMobile()` verifies every request on this pat
 3. Confirm the browser site still works and still asks for sign-in.
 4. For production, repeat Parts 1–3 with a new OIDC application, a bypass on `skylinechurch.tech` with path `api/mobile/*`, and `ACCESS_MOBILE_CLIENT_ID` under the top-level `vars`.
 
+### Part 5: stay signed in and skip the chooser page
+
+These settings make the email code a once-a-month step. After that, people open the app with Face ID.
+
+1. Open the **Skyline Pulse Mobile** SaaS application → **Advanced settings**.
+   - **Access token lifetime**: `30m`. This is how long each sign-in token lasts before the app quietly renews it.
+   - **Refresh token lifetime**: `30d`. This is how long the app can keep renewing before it asks for an email code again. Access re-checks the person against your policies on every renewal, so removing someone from the policy still locks them out within 30 minutes.
+2. In **Zero Trust** → **Settings** → **Authentication**, check **Global session timeout**. It must be **at least 30 days**, or it cuts sessions short. Cloudflare says the refresh lifetime should be shorter than the global session.
+3. In the same SaaS application, under **Identity providers**, keep only **One-time PIN** selected and turn on **Instant authentication**. Sign-in then goes straight to the email box instead of a chooser page.
+4. Run `npm run test:mobile-signin`. It now also reports **Staying signed in: PASS** once a refresh token is issued and renews correctly.
+
+The app only signs someone out when Cloudflare rejects a renewal, for example after 30 days or after removal from the policy. Losing signal keeps them signed in, and the screen shows "Unable to connect" until the connection comes back.
+
 ### Confirmed on staging (October 31, 2026)
 
 The staging application's public discovery document (`<issuer>/.well-known/openid-configuration`) matches what `authorizeMobile()` expects:

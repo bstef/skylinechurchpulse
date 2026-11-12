@@ -92,6 +92,22 @@ Native apps can't use the Cloudflare Access cookie the website relies on. The ap
 - [ ] Try it on a phone: log a service from a Planning Center plan, log one by hand, edit and delete each, log production, and check a draft survives closing the app mid-form.
 - [ ] Check the Home page on a phone: the counts and averages match the website, the attendance chart shows the last 8 services, and each card and Recently Logged row opens the right screen.
 
+## Sign-in improvements 🚧
+
+The email code was the main complaint after the first run on a phone, so it now happens about once a month instead of every time.
+
+| Done | Where |
+|---|---|
+| Face ID / Touch ID lock when opening a saved sign-in and after 5 minutes away, falling back to the phone passcode; a toggle in More that needs Face ID to turn off | `mobile/src/LockContext.tsx`, `mobile/src/lock.ts` |
+| Renewal keeps people signed in; only a rejection from Cloudflare signs them out, and losing signal doesn't | `mobile/src/AuthContext.tsx`, `mobile/src/session.ts` |
+| Sign-in screen that explains the three steps (iOS prompt, email code, back to the app) with plain-language errors | `mobile/app/sign-in.tsx` |
+| `npm run test:mobile-signin` also checks that refresh tokens renew | `scripts/mobile-signin-test.mjs` |
+
+**Left to do**
+- [ ] Cloudflare: refresh token lifetime, global session timeout and instant authentication (see [MOBILE-API.md](MOBILE-API.md), Part 5)
+- [ ] Run `npm run test:mobile-signin` and get **Staying signed in: PASS**
+- [ ] On a phone: sign in, close the app, reopen it and unlock with Face ID; leave it for 5 minutes and check it locks again
+
 ## Phase 4: Calendar and Planning Center ⬜
 
 - [ ] Calendar day and month views of logged services and plans

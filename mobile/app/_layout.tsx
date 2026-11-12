@@ -1,11 +1,15 @@
 import { useEffect } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { Stack } from 'expo-router';
+import { FullWindowOverlay } from 'react-native-screens';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
 import { ThemeProvider, useTheme } from '../src/ThemeContext.tsx';
 import { AuthProvider, useAuth } from '../src/AuthContext.tsx';
 import { DataProvider } from '../src/DataContext.tsx';
+import { LockProvider, useLock } from '../src/LockContext.tsx';
+import { LockScreen } from '../src/LockScreen.tsx';
 import { isDarkTheme } from '../src/theme.ts';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -13,7 +17,9 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 function Navigator() {
   const { theme, colors, ready } = useTheme();
   const { status } = useAuth();
-  const loading = !ready || status === 'loading';
+  const lock = useLock();
+  // Wait for the lock decision too, so a saved sign-in never flashes church data before Face ID.
+  const loading = !ready || status === 'loading' || !lock.ready;
 
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(colors.paper).catch(() => {});
@@ -30,7 +36,6 @@ function Navigator() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.paper } }}>
         <Stack.Protected guard={status === 'signed-in'}>
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="skyyouth" options={pushed} />
           <Stack.Screen name="service-form" options={{ ...pushed, presentation: 'modal' }} />
           <Stack.Screen name="production-form" options={{ ...pushed, presentation: 'modal' }} />
         </Stack.Protected>
@@ -38,6 +43,10 @@ function Navigator() {
           <Stack.Screen name="sign-in" />
         </Stack.Protected>
       </Stack>
+      {/* The lock covers the app rather than replacing it: the router stays mounted, and
+          unlocking returns to the same screen, even part-way through a form. FullWindowOverlay
+          sits above native sheets on iOS too, so an open form can't show over the lock. */}
+      {lock.locked ? <FullWindowOverlay><View style={StyleSheet.absoluteFill}><LockScreen /></View></FullWindowOverlay> : null}
     </>
   );
 }
@@ -46,9 +55,11 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <DataProvider>
-          <Navigator />
-        </DataProvider>
+        <LockProvider>
+          <DataProvider>
+            <Navigator />
+          </DataProvider>
+        </LockProvider>
       </AuthProvider>
     </ThemeProvider>
   );
