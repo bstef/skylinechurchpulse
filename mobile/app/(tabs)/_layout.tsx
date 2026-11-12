@@ -17,7 +17,7 @@ export default function TabsLayout() {
       tabBarInactiveTintColor: colors.muted,
       sceneStyle: { backgroundColor: colors.paper },
     }}>
-      <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: icon('🏠') }} />
+      <Tabs.Screen name="index" options={{ title: 'Home', headerShown: false, tabBarIcon: icon('🏠') }} />
       <Tabs.Screen name="services" options={{ title: 'Services', tabBarIcon: icon('🗓️') }} />
       <Tabs.Screen name="production" options={{ title: 'Production', tabBarIcon: icon('🎛️') }} />
       <Tabs.Screen name="calendar" options={{ title: 'Calendar', tabBarIcon: icon('📅') }} />
