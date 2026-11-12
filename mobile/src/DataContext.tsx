@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from './AuthContext.tsx';
 import { saveErrorMessage, type PcoPlan, type ProductionEntry, type ServiceEntry } from './logging.ts';
+import type { Serving } from './home.ts';
 
 type Table = 'service_entries' | 'production_entries';
 type Loadable<T> = { rows: T[]; loading: boolean; error: string | null };
@@ -10,6 +11,8 @@ type DataState = {
   services: Loadable<ServiceEntry>;
   production: Loadable<ProductionEntry>;
   plans: PlansState;
+  // Planning Center serving signups for the Home page; null while loading or if unavailable.
+  serving: Serving | null;
   refreshAll: () => Promise<void>;
   refreshPlans: (daysPast?: number) => Promise<void>;
   // Each returns an error message to show, or null on success; the lists reload either way.
@@ -29,6 +32,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const signedIn = status === 'signed-in';
   const [services, setServices] = useState<Loadable<ServiceEntry>>(empty);
   const [production, setProduction] = useState<Loadable<ProductionEntry>>(empty);
+  const [serving, setServing] = useState<Serving | null>(null);
   const [plans, setPlans] = useState<PlansState>({ ...empty<PcoPlan>(), daysPast: PLANS_DAYS_PAST, daysPastMax: 120, checkinsUnavailable: false });
 
   // Bumped on every sign-in and sign-out; a load that finishes under an older value is ignored,
@@ -60,9 +64,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
     } : { ...state, loading: false, error: result.error?.message ?? 'Planning Center is unavailable.' });
   }, [api]);
 
+  const loadServing = useCallback(async () => {
+    const generation = session.current;
+    const result = await api.stats<Serving>();
+    if (generation !== session.current) return;
+    const section = result.data?.serving;
+    // Keep the last numbers if a reload fails; the section carries its own error when Planning Center can't answer.
+    if (section && !section.error) setServing({ responded: section.responded, needs_response: section.needs_response, total_signups: section.total_signups });
+  }, [api]);
+
   const refreshAll = useCallback(async () => {
-    await Promise.all([loadTable('service_entries'), loadTable('production_entries'), refreshPlans(plans.daysPast)]);
-  }, [loadTable, refreshPlans, plans.daysPast]);
+    await Promise.all([loadTable('service_entries'), loadTable('production_entries'), refreshPlans(plans.daysPast), loadServing()]);
+  }, [loadTable, refreshPlans, loadServing, plans.daysPast]);
 
   // Load once signed in; forget everything on sign-out so the next person starts clean.
   useEffect(() => {
@@ -71,12 +84,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setServices(empty());
       setProduction(empty());
       setPlans(state => ({ ...state, ...empty<PcoPlan>(), daysPast: PLANS_DAYS_PAST }));
+      setServing(null);
       return;
     }
     loadTable('service_entries');
     loadTable('production_entries');
     refreshPlans();
-  }, [signedIn, loadTable, refreshPlans]);
+    loadServing();
+  }, [signedIn, loadTable, refreshPlans, loadServing]);
 
   const save = useCallback(async (table: Table, payload: Record<string, unknown>, id?: string) => {
     const result = id ? await api.update(table, id, payload) : await api.create(table, payload);
@@ -90,8 +105,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return result.error ? "Couldn't delete: " + result.error.message : null;
   }, [api, loadTable]);
 
-  const value = useMemo(() => ({ services, production, plans, refreshAll, refreshPlans, save, remove }),
-    [services, production, plans, refreshAll, refreshPlans, save, remove]);
+  const value = useMemo(() => ({ services, production, plans, serving, refreshAll, refreshPlans, save, remove }),
+    [services, production, plans, serving, refreshAll, refreshPlans, save, remove]);
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }
 

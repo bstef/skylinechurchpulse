@@ -11,7 +11,7 @@ The iPhone, iPad and Android app for Skyline Pulse, built with [Expo](https://ex
 | **Sign in** | Sign in once with the same email as the website: iOS asks to use `cloudflareaccess.com`, you enter your email, then the code Cloudflare emails you. The sign-in is kept in the phone's secure storage (Keychain / Keystore). |
 | **Face ID / Touch ID** | After the first sign-in, Face ID opens the app. It asks again after 5 minutes away and falls back to the phone passcode. Turn it off in **More → Security** (which itself needs Face ID). |
 | **Staying signed in** | The app quietly renews the sign-in. People sign out only when Cloudflare rejects the renewal (after 30 days, or if they're removed from the access policy). Losing signal shows "Unable to connect" and keeps them signed in. This needs refresh tokens turned on in Cloudflare, see [MOBILE-API.md Part 5](../docs/MOBILE-API.md). |
-| **Home** | Counts for Sunday Services, Production and SkyYouth, how many Planning Center plans still need details, and the latest service. Each card opens its tab. |
+| **Home** | Like the website's home page: welcome banner, how many Planning Center plans still need details, count tiles (including serving responses), average scores, an attendance trend for the last 8 services, a card for each section, and Recently Logged. Each card and entry opens its screen. |
 | **Services** | This fortnight's Planning Center plans marked *Upcoming*, *Needs details*, *Logged* or *+ Log another*. Tapping a plan opens the form with the date, service and Check-Ins attendance filled in. You can also log a service by hand, edit or delete any entry, and load older plans back to 120 days. |
 | **SkyYouth** | The same, for SkyYouth's own Planning Center plans and entries. "Log a service" preselects SkyYouth. |
 | **Production** | Log role attendance and who covered each role, slides grade, missed cues and camera direction. Edit or delete past logs. |
@@ -124,6 +124,7 @@ On a real iPhone, iOS asks once: "Allow Skyline Pulse to use Face ID?". It shows
 | `src/AuthContext.tsx`, `src/session.ts` | Sign-in, secure token storage, renewal rules |
 | `src/LockContext.tsx`, `src/lock.ts` | Face ID / Touch ID lock and when it applies |
 | `src/DataContext.tsx` | Shared cache of entries and plans, reloaded after every save and cleared on sign-out |
+| `src/home.ts` | Home page counts, averages, attendance trend and section cards, ported from the website |
 | `src/logging.ts` | Form defaults, validation, payloads and Planning Center matching, ported from the website |
 | `src/drafts.ts`, `src/useDraftForm.ts` | Unsaved form drafts on the device |
 | `src/lists.tsx`, `src/form.tsx`, `src/ui.tsx` | Shared list cards, form controls and building blocks |

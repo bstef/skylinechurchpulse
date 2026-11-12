@@ -68,6 +68,10 @@ export function createApi({ baseUrl, getToken, onUnauthorized, fetchImpl = fetch
     plans<P = Record<string, unknown>>(daysPast?: number): Promise<ApiResult<{ plans: P[]; warnings: Array<{ source?: string; status?: number }>; days_past: number; days_past_max: number }>> {
       return send('/pco-plans' + (daysPast ? `?days_past=${daysPast}` : ''));
     },
+    // Planning Center Check-Ins, People and Serving summaries; each section reports its own error.
+    stats<S = Record<string, unknown>>(): Promise<ApiResult<{ serving?: S & { error?: unknown } }>> {
+      return send('/pco-stats');
+    },
     status(): Promise<ApiResult<{ database: string; preview: boolean; emailEnabled: boolean; planningCenterConfigured: boolean }>> {
       return send('/status');
     },

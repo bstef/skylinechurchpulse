@@ -19,7 +19,7 @@ export default function TabsLayout() {
       // A small slide and fade toward the tab you tapped: enough to feel like movement, not a full page push.
       animation: 'shift',
     }}>
-      <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: icon('🏠') }} />
+      <Tabs.Screen name="index" options={{ title: 'Home', headerShown: false, tabBarIcon: icon('🏠') }} />
       <Tabs.Screen name="services" options={{ title: 'Services', tabBarIcon: icon('🗓️') }} />
       <Tabs.Screen name="skyyouth" options={{ title: 'SkyYouth', tabBarIcon: icon('🎧') }} />
       <Tabs.Screen name="production" options={{ title: 'Production', tabBarIcon: icon('🎛️') }} />
