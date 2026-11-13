@@ -13,7 +13,7 @@ Skyline Pulse brings service attendance, worship and engagement feedback, produc
 
 The live app is protected by **Cloudflare Access**. Production has used **Cloudflare D1** since October 22, 2026; Supabase is retained read-only for migration recovery.
 
-[Features](#features) · [Local development](#local-development) · [Deployment](#deployment) · [Scheduled jobs](#scheduled-jobs) · [Monitoring](#monitoring) · [Data and recovery](#data-and-recovery) · [Mobile app](#mobile-app)
+[Features](#features) · [Local development](#local-development) · [Deployment](#deployment) · [Scheduled jobs](#scheduled-jobs) · [Monitoring](#monitoring) · [Data and recovery](#data-and-recovery) · [Mobile app](#mobile-app) · [Architecture](docs/ARCHITECTURE.md)
 
 ## Features
 
@@ -31,6 +31,8 @@ The live app is protected by **Cloudflare Access**. Production has used **Cloudf
 Manually logged services without a Planning Center plan ID are recognized by matching their date and known service time. This keeps existing records visible and prevents duplicate “needs details” calendar reminders.
 
 ## How it works
+
+See the [architecture diagram](docs/ARCHITECTURE.md) for how the website, the mobile app and the backend connect.
 
 The browser calls same-origin Pages Functions for data and integrations. Functions validate the user's Cloudflare Access session and inputs, then query D1 with prepared statements. Planning Center and email credentials stay on the server.
 
